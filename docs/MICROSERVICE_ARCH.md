@@ -295,3 +295,53 @@ A typical read/search flow looks like this:
 - object storage for media files
 - search engine for indexed retrieval
 
+```mermaid
+sequenceDiagram
+    participant U as User / Client
+    participant G as api-gateway
+    participant A as researcher-auth-service
+    participant E as encyclopedia-service
+    participant M as media-service
+    participant I as search-indexer-service
+    participant S as search-service
+
+    rect rgb(235, 245, 255)
+    Note over U,S: Authentication and page editing flow
+    U->>G: Login request
+    G->>A: Authenticate credentials
+    A-->>G: Access token / identity
+    G-->>U: Auth response
+
+    U->>G: Create or edit page
+    G->>E: Forward content request
+    E-->>G: Page saved / new revision created
+    G-->>U: Success response
+
+    E-->>I: Emit page_created / page_updated / page_published
+    I->>S: Update search index
+    end
+
+    rect rgb(245, 255, 235)
+    Note over U,S: Media upload flow
+    U->>G: Upload media
+    G->>M: Store asset
+    M-->>G: Asset ID / URL
+    G-->>U: Upload success
+
+    M-->>I: Emit media_metadata_updated
+    I->>S: Refresh indexed metadata
+    end
+
+    rect rgb(255, 245, 235)
+    Note over U,S: Search and read flow
+    U->>G: Search query
+    G->>S: Forward query
+    S-->>G: Ranked results
+    G-->>U: Search results
+
+    U->>G: Open page
+    G->>E: Fetch canonical page
+    E-->>G: Markdown/content metadata
+    G-->>U: Page content
+    end
+```
