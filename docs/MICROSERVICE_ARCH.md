@@ -364,3 +364,43 @@ sequenceDiagram
     E-->>G: Markdown + metadata
     G-->>U: Page content
 ```
+
+```mermaid
+flowchart TD
+    U[User / Client]
+
+    G[API Gateway]
+
+    A[Auth Service]
+    E[Encyclopedia Service]
+    M[Media Service]
+    S[Search Service]
+    I[Search Indexer]
+
+    ADB[(PostgreSQL)]
+    EDB[(PostgreSQL)]
+    RV[(Git / Object Revision Store)]
+    MDB[(PostgreSQL)]
+    OBJ[(S3 / MinIO)]
+    B[(Event Broker)]
+    IDX[(OpenSearch / Elasticsearch)]
+
+    U -->|HTTPS| G
+
+    G -->|HTTP/gRPC| A
+    G -->|HTTP/gRPC| E
+    G -->|HTTP/gRPC| M
+    G -->|HTTP/gRPC| S
+
+    A -->|SQL| ADB
+    E -->|SQL| EDB
+    E -->|Git API / Object API| RV
+    M -->|SQL| MDB
+    M -->|Object API| OBJ
+    S -->|Search API| IDX
+
+    E -->|Publish domain events| B
+    M -->|Publish domain events| B
+    B -->|Consume events| I
+    I -->|Index write API| IDX
+```
