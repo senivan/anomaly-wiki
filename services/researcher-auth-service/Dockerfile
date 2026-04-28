@@ -7,10 +7,11 @@ WORKDIR /app
 #     build-essential \
 #     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY services/researcher-auth-service/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code (secrets/ and __pycache__ are excluded by .dockerignore)
-COPY . .
+# Copy the shared package and auth service into the image.
+COPY shared ./shared
+COPY services/researcher-auth-service/ ./
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

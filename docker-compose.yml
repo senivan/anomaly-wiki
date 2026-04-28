@@ -88,7 +88,8 @@ services:
 
   researcher-auth-service:
     build:
-      context: ./services/researcher-auth-service
+      context: .
+      dockerfile: services/researcher-auth-service/Dockerfile
     depends_on:
       db:
         condition: service_healthy

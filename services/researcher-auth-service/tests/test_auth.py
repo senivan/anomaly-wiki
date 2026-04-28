@@ -1,7 +1,6 @@
 import pytest
 import uuid
 from httpx import AsyncClient, ASGITransport
-from cryptography.hazmat.primitives import serialization
 from auth.keys import load_keys
 
 @pytest.mark.asyncio
@@ -65,3 +64,46 @@ async def test_register_and_login(app):
         assert user_data["email"] == email
         assert user_data["role"] == "Researcher"
         assert user_data["is_active"] is True
+
+
+@pytest.mark.asyncio
+async def test_register_ignores_privileged_role_input(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        email = f"test-{uuid.uuid4()}@example.com"
+        register_payload = {
+            "email": email,
+            "password": "testpassword123",
+            "role": "Admin",
+        }
+
+        register_response = await ac.post("/auth/register", json=register_payload)
+        assert register_response.status_code == 201, register_response.text
+        assert register_response.json()["role"] == "Researcher"
+
+
+@pytest.mark.asyncio
+async def test_users_me_cannot_self_promote(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        email = f"test-{uuid.uuid4()}@example.com"
+        password = "testpassword123"
+
+        register_response = await ac.post(
+            "/auth/register",
+            json={"email": email, "password": password},
+        )
+        assert register_response.status_code == 201, register_response.text
+
+        login_response = await ac.post(
+            "/auth/login",
+            data={"username": email, "password": password},
+        )
+        assert login_response.status_code == 200, login_response.text
+        token = login_response.json()["access_token"]
+
+        update_response = await ac.patch(
+            "/users/me",
+            json={"role": "Admin"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert update_response.status_code == 200, update_response.text
+        assert update_response.json()["role"] == "Researcher"
