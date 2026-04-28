@@ -24,6 +24,12 @@ class Visibility(str, Enum):
     PUBLIC = "Public"
     INTERNAL = "Internal"
 
+class UserRole(str, Enum):
+    RESEARCHER = "Researcher"
+    EDITOR = "Editor"
+    ADMIN = "Admin"
+    PUBLIC = "Public"
+
 class Page(BaseModel):
     id: UUID
     slug: str
