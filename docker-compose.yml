@@ -98,6 +98,21 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/auth_db
 
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    depends_on:
+      researcher-auth-service:
+        condition: service_started
+    environment:
+      API_GATEWAY_RESEARCHER_AUTH_BASE_URL: http://researcher-auth-service:8000
+      API_GATEWAY_ENCYCLOPEDIA_BASE_URL: http://encyclopedia-service:8000
+      API_GATEWAY_MEDIA_SERVICE_BASE_URL: http://media-service:8000
+      API_GATEWAY_SEARCH_SERVICE_BASE_URL: http://search-service:8000
+    ports:
+      - "8000:8000"
+
 volumes:
   postgres_data:
   rabbitmq_data:
