@@ -3,12 +3,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from db import dispose_engine, get_engine
+from models import Base
 from routes.health import router as health_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    get_engine()
+    async with get_engine().begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
     yield
     await dispose_engine()
 
