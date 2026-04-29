@@ -9,6 +9,7 @@ from pydantic import AnyHttpUrl
 
 from config import Settings
 from errors import GatewayUpstreamResponseError
+from errors import REQUEST_ID_HEADER
 from security import AuthContext
 
 HOP_BY_HOP_HEADERS = {
@@ -78,6 +79,9 @@ async def forward_request(
         request.headers,
         extra_excluded=excluded_headers,
     )
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        request_headers[REQUEST_ID_HEADER] = request_id
     if forwarded_headers:
         request_headers.update(dict(forwarded_headers))
 

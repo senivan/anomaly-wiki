@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from httpx import ASGITransport, AsyncClient
 
@@ -61,6 +61,24 @@ async def test_login_is_proxied_with_form_body() -> None:
     }
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["X-Request-ID"] == "auth-login-1"
+
+
+async def test_generated_request_id_is_forwarded_upstream() -> None:
+    upstream_app = FastAPI()
+
+    @upstream_app.post("/auth/login")
+    async def login(request: Request) -> JSONResponse:
+        return JSONResponse(
+            status_code=200,
+            content={"request_id": request.headers.get("x-request-id")},
+        )
+
+    app = create_app(upstream_transport=ASGITransport(app=upstream_app))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/auth/login", data={"username": "user@example.com"})
+
+    assert response.status_code == 200
+    assert response.json()["request_id"] == response.headers["X-Request-ID"]
 
 
 async def test_jwks_is_proxied_to_auth_service() -> None:
