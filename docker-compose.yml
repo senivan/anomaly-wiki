@@ -98,12 +98,26 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/auth_db
 
+  encyclopedia-service:
+    build:
+      context: .
+      dockerfile: services/encyclopedia/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENCYCLOPEDIA_SERVICE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/encyclopedia_db
+    ports:
+      - "8001:8000"
+
   api-gateway:
     build:
       context: .
       dockerfile: services/api-gateway/Dockerfile
     depends_on:
       researcher-auth-service:
+        condition: service_started
+      encyclopedia-service:
         condition: service_started
     environment:
       API_GATEWAY_RESEARCHER_AUTH_BASE_URL: http://researcher-auth-service:8000
