@@ -2,6 +2,7 @@ import json
 import logging
 
 import httpx
+from http import HTTPStatus
 from fastapi import APIRouter
 from httpx import ASGITransport, AsyncClient
 
@@ -21,8 +22,14 @@ async def test_healthcheck() -> None:
     assert response.json() == {"status": "ok"}
 
 
-async def test_readiness_exposes_downstream_configuration() -> None:
-    app = create_app()
+async def test_readiness_checks_each_downstream_service() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            status_code=HTTPStatus.OK,
+            json={"service": request.url.host},
+        )
+
+    app = create_app(upstream_transport=httpx.MockTransport(handler))
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
@@ -33,10 +40,67 @@ async def test_readiness_exposes_downstream_configuration() -> None:
     assert response.json() == {
         "status": "ok",
         "services": {
-            "researcher_auth_service": "http://researcher-auth-service:8000/",
-            "encyclopedia_service": "http://encyclopedia-service:8000/",
-            "media_service": "http://media-service:8000/",
-            "search_service": "http://search-service:8000/",
+            "researcher_auth_service": {
+                "status": "ok",
+                "url": "http://researcher-auth-service:8000/",
+                "status_code": 200,
+            },
+            "encyclopedia_service": {
+                "status": "ok",
+                "url": "http://encyclopedia-service:8000/",
+                "status_code": 200,
+            },
+            "media_service": {
+                "status": "ok",
+                "url": "http://media-service:8000/",
+                "status_code": 200,
+            },
+            "search_service": {
+                "status": "ok",
+                "url": "http://search-service:8000/",
+                "status_code": 200,
+            },
+        },
+    }
+
+
+async def test_readiness_returns_503_when_any_downstream_service_fails() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "media-service":
+            return httpx.Response(status_code=HTTPStatus.SERVICE_UNAVAILABLE)
+        return httpx.Response(status_code=HTTPStatus.OK)
+
+    app = create_app(upstream_transport=httpx.MockTransport(handler))
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "degraded",
+        "services": {
+            "researcher_auth_service": {
+                "status": "ok",
+                "url": "http://researcher-auth-service:8000/",
+                "status_code": 200,
+            },
+            "encyclopedia_service": {
+                "status": "ok",
+                "url": "http://encyclopedia-service:8000/",
+                "status_code": 200,
+            },
+            "media_service": {
+                "status": "error",
+                "url": "http://media-service:8000/",
+                "status_code": 503,
+            },
+            "search_service": {
+                "status": "ok",
+                "url": "http://search-service:8000/",
+                "status_code": 200,
+            },
         },
     }
 
