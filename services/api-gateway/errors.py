@@ -15,10 +15,12 @@ class GatewayUpstreamResponseError(Exception):
         service: str,
         status_code: int,
         body: Any | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
         self.service = service
         self.status_code = status_code
         self.body = body
+        self.headers = dict(headers or {})
         super().__init__(f"{service} returned status {status_code}")
 
 
@@ -33,6 +35,7 @@ def error_response(
     code: str,
     message: str,
     details: Mapping[str, Any] | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     payload: dict[str, Any] = {
         "error": {
@@ -43,14 +46,14 @@ def error_response(
     }
     if details:
         payload["error"]["details"] = dict(details)
-    return JSONResponse(status_code=status_code, content=payload)
+    return JSONResponse(status_code=status_code, content=payload, headers=dict(headers or {}))
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(httpx.TimeoutException)
-    async def handle_timeout(_: Request, exc: httpx.TimeoutException) -> JSONResponse:
+    async def handle_timeout(request: Request, exc: httpx.TimeoutException) -> JSONResponse:
         return error_response(
-            _,
+            request,
             status_code=504,
             code="upstream_timeout",
             message="Upstream request timed out.",
@@ -58,9 +61,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(httpx.ConnectError)
-    async def handle_connect_error(_: Request, exc: httpx.ConnectError) -> JSONResponse:
+    async def handle_connect_error(request: Request, exc: httpx.ConnectError) -> JSONResponse:
         return error_response(
-            _,
+            request,
             status_code=503,
             code="upstream_unavailable",
             message="Upstream service is unavailable.",
@@ -68,9 +71,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(httpx.RequestError)
-    async def handle_request_error(_: Request, exc: httpx.RequestError) -> JSONResponse:
+    async def handle_request_error(request: Request, exc: httpx.RequestError) -> JSONResponse:
         return error_response(
-            _,
+            request,
             status_code=502,
             code="upstream_request_error",
             message="Gateway failed to reach the upstream service.",
@@ -95,4 +98,5 @@ def register_exception_handlers(app: FastAPI) -> None:
             code=code,
             message="Upstream service returned an error response.",
             details=details,
+            headers=exc.headers,
         )
