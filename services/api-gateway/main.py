@@ -8,6 +8,7 @@ from errors import register_exception_handlers
 from middleware import register_http_middleware
 from routes.auth import router as auth_router
 from routes.health import router as health_router
+from security import JwksCache
 
 
 def create_app(*, upstream_transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
@@ -18,6 +19,7 @@ def create_app(*, upstream_transport: httpx.AsyncBaseTransport | None = None) ->
         version="0.1.0",
     )
     app.state.upstream_transport = upstream_transport
+    app.state.jwks_cache = JwksCache()
 
     app.add_middleware(
         CORSMiddleware,
