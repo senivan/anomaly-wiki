@@ -41,6 +41,14 @@ class TransitionPageStatusRequest(BaseModel):
     status: PageStatus
 
 
+class UpdatePageMetadataRequest(BaseModel):
+    expected_page_version: int = Field(ge=1)
+    tags: list[str] = Field(default_factory=list)
+    classifications: list[str] = Field(default_factory=list)
+    related_page_ids: list[UUID] = Field(default_factory=list)
+    media_asset_ids: list[UUID] = Field(default_factory=list)
+
+
 class PageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -52,6 +60,10 @@ class PageResponse(BaseModel):
     current_draft_revision_id: UUID | None
     current_published_revision_id: UUID | None
     version: int
+    tags: list[str]
+    classifications: list[str]
+    related_page_ids: list[UUID]
+    media_asset_ids: list[UUID]
     created_at: datetime
     updated_at: datetime
 

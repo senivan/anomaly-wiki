@@ -32,6 +32,10 @@ class InvalidStatusTransitionError(Exception):
     pass
 
 
+class InvalidMetadataError(Exception):
+    pass
+
+
 ALLOWED_STATUS_TRANSITIONS = {
     PageStatus.DRAFT: {PageStatus.REVIEW, PageStatus.ARCHIVED, PageStatus.REDACTED},
     PageStatus.REVIEW: {PageStatus.DRAFT, PageStatus.ARCHIVED, PageStatus.REDACTED},
@@ -288,3 +292,88 @@ class PageService:
         except Exception:
             await self.session.rollback()
             raise
+
+    async def update_page_metadata(
+        self,
+        *,
+        page_id: UUID,
+        expected_page_version: int,
+        tags: list[str],
+        classifications: list[str],
+        related_page_ids: list[UUID],
+        media_asset_ids: list[UUID],
+    ) -> tuple[PageRecord, RevisionRecord | None, RevisionRecord | None]:
+        repository = PageRepository(self.session)
+        page = await repository.get_page(page_id)
+        if page is None:
+            raise PageNotFoundError(f"Page {page_id} was not found.")
+
+        normalized_tags = self._normalize_string_list(tags)
+        normalized_classifications = self._normalize_string_list(classifications)
+        unique_related_page_ids = self._dedupe_uuid_list(related_page_ids)
+        unique_media_asset_ids = self._dedupe_uuid_list(media_asset_ids)
+
+        if page.id in unique_related_page_ids:
+            raise InvalidMetadataError("A page cannot reference itself as a related page.")
+
+        if unique_related_page_ids:
+            related_pages = [
+                await repository.get_page(related_page_id)
+                for related_page_id in unique_related_page_ids
+            ]
+            missing_related_pages = [
+                str(related_page_id)
+                for related_page_id, related_page in zip(unique_related_page_ids, related_pages, strict=False)
+                if related_page is None
+            ]
+            if missing_related_pages:
+                raise InvalidMetadataError(
+                    f"Unknown related page IDs: {', '.join(missing_related_pages)}."
+                )
+
+        try:
+            page = await repository.replace_page_metadata(
+                page_id=page.id,
+                expected_version=expected_page_version,
+                tags=normalized_tags,
+                classifications=normalized_classifications,
+                related_page_ids=unique_related_page_ids,
+                media_asset_ids=unique_media_asset_ids,
+            )
+            await self.session.commit()
+            current_draft_revision = None
+            if page.current_draft_revision_id is not None:
+                current_draft_revision = await repository.get_revision(page.current_draft_revision_id)
+            current_published_revision = None
+            if page.current_published_revision_id is not None:
+                current_published_revision = await repository.get_revision(page.current_published_revision_id)
+            return page, current_draft_revision, current_published_revision
+        except StalePageVersionError:
+            await self.session.rollback()
+            raise
+        except Exception:
+            await self.session.rollback()
+            raise
+
+    @staticmethod
+    def _normalize_string_list(values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for value in values:
+            stripped = value.strip()
+            if not stripped or stripped in seen:
+                continue
+            seen.add(stripped)
+            normalized.append(stripped)
+        return normalized
+
+    @staticmethod
+    def _dedupe_uuid_list(values: list[UUID]) -> list[UUID]:
+        deduped: list[UUID] = []
+        seen: set[UUID] = set()
+        for value in values:
+            if value in seen:
+                continue
+            seen.add(value)
+            deduped.append(value)
+        return deduped

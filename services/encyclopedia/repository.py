@@ -6,9 +6,10 @@ from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from domain import PageStatus, PageType, Visibility
-from models import PageRecord, RevisionRecord
+from models import PageMediaReferenceRecord, PageRecord, PageRelationshipRecord, RevisionRecord
 
 UNSET: Final = object()
 
@@ -20,6 +21,12 @@ class StalePageVersionError(Exception):
 @dataclass
 class PageRepository:
     session: AsyncSession
+
+    def _page_query(self):
+        return select(PageRecord).options(
+            selectinload(PageRecord.related_pages),
+            selectinload(PageRecord.media_references),
+        )
 
     async def create_page(
         self,
@@ -62,11 +69,14 @@ class PageRepository:
         return revision
 
     async def get_page(self, page_id: UUID) -> PageRecord | None:
-        return await self.session.get(PageRecord, page_id)
+        result = await self.session.execute(
+            self._page_query().where(PageRecord.id == page_id)
+        )
+        return result.scalar_one_or_none()
 
     async def get_page_by_slug(self, slug: str) -> PageRecord | None:
         result = await self.session.execute(
-            select(PageRecord).where(PageRecord.slug == slug)
+            self._page_query().where(PageRecord.slug == slug)
         )
         return result.scalar_one_or_none()
 
@@ -142,7 +152,37 @@ class PageRepository:
             )
 
         await self.session.flush()
-        updated_page = await self.session.get(PageRecord, page_id, populate_existing=True)
+        updated_page = await self.get_page(page_id)
         if updated_page is None:
             raise LookupError(f"Page {page_id} was not found after update.")
         return updated_page
+
+    async def replace_page_metadata(
+        self,
+        *,
+        page_id: UUID,
+        expected_version: int,
+        tags: list[str],
+        classifications: list[str],
+        related_page_ids: list[UUID],
+        media_asset_ids: list[UUID],
+    ) -> PageRecord:
+        page = await self.get_page(page_id)
+        if page is None:
+            raise LookupError(f"Page {page_id} was not found.")
+
+        page.tags = tags
+        page.classifications = classifications
+        page.related_pages = [
+            PageRelationshipRecord(target_page_id=target_page_id)
+            for target_page_id in related_page_ids
+        ]
+        page.media_references = [
+            PageMediaReferenceRecord(asset_id=asset_id)
+            for asset_id in media_asset_ids
+        ]
+
+        return await self.update_page_state(
+            page_id=page_id,
+            expected_version=expected_version,
+        )

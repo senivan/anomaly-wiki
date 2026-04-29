@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import get_async_session
 from page_service import (
+    InvalidMetadataError,
     InvalidParentRevisionError,
     InvalidStatusTransitionError,
     PageAlreadyExistsError,
@@ -22,6 +23,7 @@ from schemas import (
     RevertRevisionRequest,
     RevisionDetailResponse,
     TransitionPageStatusRequest,
+    UpdatePageMetadataRequest,
 )
 
 router = APIRouter(prefix="/pages", tags=["pages"])
@@ -74,6 +76,36 @@ async def get_page_state(
         page, current_draft_revision, current_published_revision = await service.get_page_state(page_id)
     except PageNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return PageStateResponse(
+        page=page,
+        current_draft_revision=current_draft_revision,
+        current_published_revision=current_published_revision,
+    )
+
+
+@router.put("/{page_id}/metadata", response_model=PageStateResponse)
+async def update_page_metadata(
+    page_id: UUID,
+    payload: UpdatePageMetadataRequest,
+    session: AsyncSession = Depends(get_async_session),
+) -> PageStateResponse:
+    service = PageService(session)
+    try:
+        page, current_draft_revision, current_published_revision = await service.update_page_metadata(
+            page_id=page_id,
+            expected_page_version=payload.expected_page_version,
+            tags=payload.tags,
+            classifications=payload.classifications,
+            related_page_ids=payload.related_page_ids,
+            media_asset_ids=payload.media_asset_ids,
+        )
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InvalidMetadataError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except StalePageVersionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return PageStateResponse(
         page=page,
