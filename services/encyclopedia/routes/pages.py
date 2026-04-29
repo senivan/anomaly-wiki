@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db import get_async_session
 from page_service import (
     InvalidParentRevisionError,
+    InvalidStatusTransitionError,
     PageAlreadyExistsError,
     PageNotFoundError,
     PageService,
@@ -17,7 +18,10 @@ from schemas import (
     PageDraftResponse,
     PageRevisionListResponse,
     PageStateResponse,
+    PublishRevisionRequest,
+    RevertRevisionRequest,
     RevisionDetailResponse,
+    TransitionPageStatusRequest,
 )
 
 router = APIRouter(prefix="/pages", tags=["pages"])
@@ -111,3 +115,70 @@ async def get_page_revision(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return RevisionDetailResponse(page=page, revision=revision, lineage=lineage)
+
+
+@router.post("/{page_id}/publish", response_model=PageStateResponse)
+async def publish_revision(
+    page_id: UUID,
+    payload: PublishRevisionRequest,
+    session: AsyncSession = Depends(get_async_session),
+) -> PageStateResponse:
+    service = PageService(session)
+    try:
+        page, current_draft_revision, current_published_revision = await service.publish_revision(
+            page_id=page_id,
+            payload=payload,
+        )
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except StalePageVersionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return PageStateResponse(
+        page=page,
+        current_draft_revision=current_draft_revision,
+        current_published_revision=current_published_revision,
+    )
+
+
+@router.post("/{page_id}/revert", response_model=PageDraftResponse, status_code=status.HTTP_201_CREATED)
+async def revert_revision(
+    page_id: UUID,
+    payload: RevertRevisionRequest,
+    session: AsyncSession = Depends(get_async_session),
+) -> PageDraftResponse:
+    service = PageService(session)
+    try:
+        page, revision = await service.revert_to_revision(page_id=page_id, payload=payload)
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except StalePageVersionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return PageDraftResponse(page=page, revision=revision)
+
+
+@router.post("/{page_id}/status", response_model=PageStateResponse)
+async def transition_page_status(
+    page_id: UUID,
+    payload: TransitionPageStatusRequest,
+    session: AsyncSession = Depends(get_async_session),
+) -> PageStateResponse:
+    service = PageService(session)
+    try:
+        page, current_draft_revision, current_published_revision = await service.transition_page_status(
+            page_id=page_id,
+            payload=payload,
+        )
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InvalidStatusTransitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except StalePageVersionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return PageStateResponse(
+        page=page,
+        current_draft_revision=current_draft_revision,
+        current_published_revision=current_published_revision,
+    )

@@ -25,6 +25,22 @@ class CreateDraftRevisionRequest(BaseModel):
     parent_revision_id: UUID | None = None
 
 
+class PublishRevisionRequest(BaseModel):
+    expected_page_version: int = Field(ge=1)
+    revision_id: UUID
+
+
+class RevertRevisionRequest(BaseModel):
+    expected_page_version: int = Field(ge=1)
+    revision_id: UUID
+    author_id: UUID | None = None
+
+
+class TransitionPageStatusRequest(BaseModel):
+    expected_page_version: int = Field(ge=1)
+    status: PageStatus
+
+
 class PageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
