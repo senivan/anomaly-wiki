@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     cors_allowed_headers: list[str] = ["*"]
     cors_allow_credentials: bool = False
     upstream_timeout_seconds: float = 10.0
+    auth_jwks_path: str = "/auth/jwks"
+    auth_expected_audience: str = "fastapi-users:auth"
+    auth_jwt_algorithm: str = "RS256"
+    auth_jwks_cache_ttl_seconds: int = 300
 
     model_config = SettingsConfigDict(
         env_prefix="API_GATEWAY_",

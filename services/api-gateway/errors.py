@@ -24,6 +24,24 @@ class GatewayUpstreamResponseError(Exception):
         super().__init__(f"{service} returned status {status_code}")
 
 
+class GatewayAuthError(Exception):
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        code: str,
+        message: str,
+        details: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+        self.details = dict(details or {})
+        self.headers = dict(headers or {})
+        super().__init__(message)
+
+
 def get_request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
 
@@ -98,5 +116,16 @@ def register_exception_handlers(app: FastAPI) -> None:
             code=code,
             message="Upstream service returned an error response.",
             details=details,
+            headers=exc.headers,
+        )
+
+    @app.exception_handler(GatewayAuthError)
+    async def handle_auth_error(request: Request, exc: GatewayAuthError) -> JSONResponse:
+        return error_response(
+            request,
+            status_code=exc.status_code,
+            code=exc.code,
+            message=exc.message,
+            details=exc.details or None,
             headers=exc.headers,
         )
