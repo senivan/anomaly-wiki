@@ -31,4 +31,4 @@ jobs:
 
       - name: Run api-gateway tests
         working-directory: services/api-gateway
-        run: pytest
+        run: python -m pytest
