@@ -11,7 +11,14 @@ from page_service import (
     PageService,
 )
 from repository import StalePageVersionError
-from schemas import CreateDraftRevisionRequest, CreatePageRequest, PageDraftResponse
+from schemas import (
+    CreateDraftRevisionRequest,
+    CreatePageRequest,
+    PageDraftResponse,
+    PageRevisionListResponse,
+    PageStateResponse,
+    RevisionDetailResponse,
+)
 
 router = APIRouter(prefix="/pages", tags=["pages"])
 
@@ -51,3 +58,56 @@ async def create_draft_revision(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return PageDraftResponse(page=page, revision=revision)
+
+
+@router.get("/{page_id}", response_model=PageStateResponse)
+async def get_page_state(
+    page_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> PageStateResponse:
+    service = PageService(session)
+    try:
+        page, current_draft_revision, current_published_revision = await service.get_page_state(page_id)
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return PageStateResponse(
+        page=page,
+        current_draft_revision=current_draft_revision,
+        current_published_revision=current_published_revision,
+    )
+
+
+@router.get("/{page_id}/revisions", response_model=PageRevisionListResponse)
+async def list_page_revisions(
+    page_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> PageRevisionListResponse:
+    service = PageService(session)
+    try:
+        page, revisions = await service.list_page_revisions(page_id)
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return PageRevisionListResponse(page=page, revisions=revisions)
+
+
+@router.get(
+    "/{page_id}/revisions/{revision_id}",
+    response_model=RevisionDetailResponse,
+)
+async def get_page_revision(
+    page_id: UUID,
+    revision_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> RevisionDetailResponse:
+    service = PageService(session)
+    try:
+        page, revision, lineage = await service.get_page_revision(
+            page_id=page_id,
+            revision_id=revision_id,
+        )
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return RevisionDetailResponse(page=page, revision=revision, lineage=lineage)

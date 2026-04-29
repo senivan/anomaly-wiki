@@ -56,3 +56,20 @@ class RevisionResponse(BaseModel):
 class PageDraftResponse(BaseModel):
     page: PageResponse
     revision: RevisionResponse
+
+
+class PageStateResponse(BaseModel):
+    page: PageResponse
+    current_draft_revision: RevisionResponse | None
+    current_published_revision: RevisionResponse | None
+
+
+class PageRevisionListResponse(BaseModel):
+    page: PageResponse
+    revisions: list[RevisionResponse]
+
+
+class RevisionDetailResponse(BaseModel):
+    page: PageResponse
+    revision: RevisionResponse
+    lineage: list[RevisionResponse]
