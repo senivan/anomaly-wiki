@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     cors_allowed_methods: list[str] = ["*"]
     cors_allowed_headers: list[str] = ["*"]
     cors_allow_credentials: bool = False
+    upstream_timeout_seconds: float = 10.0
 
     model_config = SettingsConfigDict(
         env_prefix="API_GATEWAY_",
