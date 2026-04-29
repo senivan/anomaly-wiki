@@ -15,7 +15,12 @@ async def test_create_all_builds_page_and_revision_tables() -> None:
             lambda sync_connection: inspect(sync_connection).get_table_names()
         )
 
-    assert sorted(table_names) == ["pages", "revisions"]
+    assert sorted(table_names) == [
+        "page_media_references",
+        "page_relationships",
+        "pages",
+        "revisions",
+    ]
     await engine.dispose()
 
 

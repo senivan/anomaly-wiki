@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from domain import PageStatus, PageType, Visibility
@@ -42,13 +42,17 @@ class PageRecord(Base):
         server_default="1",
         nullable=False,
     )
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    classifications: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
@@ -68,6 +72,24 @@ class PageRecord(Base):
         foreign_keys=[current_published_revision_id],
         post_update=True,
     )
+    related_pages: Mapped[list[PageRelationshipRecord]] = relationship(
+        back_populates="page",
+        cascade="all, delete-orphan",
+        foreign_keys="PageRelationshipRecord.page_id",
+    )
+    media_references: Mapped[list[PageMediaReferenceRecord]] = relationship(
+        back_populates="page",
+        cascade="all, delete-orphan",
+        foreign_keys="PageMediaReferenceRecord.page_id",
+    )
+
+    @property
+    def related_page_ids(self) -> list[UUID]:
+        return [relationship.target_page_id for relationship in self.related_pages]
+
+    @property
+    def media_asset_ids(self) -> list[UUID]:
+        return [reference.asset_id for reference in self.media_references]
 
 
 class RevisionRecord(Base):
@@ -89,6 +111,7 @@ class RevisionRecord(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
         nullable=False,
     )
@@ -100,4 +123,36 @@ class RevisionRecord(Base):
     parent_revision: Mapped[RevisionRecord | None] = relationship(
         remote_side=[id],
         foreign_keys=[parent_revision_id],
+    )
+
+
+class PageRelationshipRecord(Base):
+    __tablename__ = "page_relationships"
+    __table_args__ = (
+        UniqueConstraint("page_id", "target_page_id", name="uq_page_relationship"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    page_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("pages.id"), nullable=False, index=True)
+    target_page_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("pages.id"), nullable=False, index=True)
+
+    page: Mapped[PageRecord] = relationship(
+        back_populates="related_pages",
+        foreign_keys=[page_id],
+    )
+
+
+class PageMediaReferenceRecord(Base):
+    __tablename__ = "page_media_references"
+    __table_args__ = (
+        UniqueConstraint("page_id", "asset_id", name="uq_page_media_reference"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    page_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("pages.id"), nullable=False, index=True)
+    asset_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+
+    page: Mapped[PageRecord] = relationship(
+        back_populates="media_references",
+        foreign_keys=[page_id],
     )
