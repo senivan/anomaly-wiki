@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain import PageStatus, PageType, Visibility
@@ -103,18 +103,32 @@ class PageRepository:
         page = await self.get_page(page_id)
         if page is None:
             raise LookupError(f"Page {page_id} was not found.")
-        if page.version != expected_version:
+
+        values: dict[str, object] = {"version": PageRecord.version + 1}
+        if current_draft_revision_id is not UNSET:
+            values["current_draft_revision_id"] = current_draft_revision_id
+        if current_published_revision_id is not UNSET:
+            values["current_published_revision_id"] = current_published_revision_id
+        if status is not UNSET:
+            values["status"] = status
+
+        result = await self.session.execute(
+            update(PageRecord)
+            .where(
+                PageRecord.id == page_id,
+                PageRecord.version == expected_version,
+            )
+            .values(**values)
+        )
+        if result.rowcount != 1:
+            current_page = await self.get_page(page_id)
+            current_version = current_page.version if current_page is not None else "missing"
             raise StalePageVersionError(
-                f"Expected page version {expected_version}, found {page.version}."
+                f"Expected page version {expected_version}, found {current_version}."
             )
 
-        if current_draft_revision_id is not UNSET:
-            page.current_draft_revision_id = current_draft_revision_id
-        if current_published_revision_id is not UNSET:
-            page.current_published_revision_id = current_published_revision_id
-        if status is not UNSET:
-            page.status = status
-
-        page.version += 1
         await self.session.flush()
-        return page
+        updated_page = await self.session.get(PageRecord, page_id, populate_existing=True)
+        if updated_page is None:
+            raise LookupError(f"Page {page_id} was not found after update.")
+        return updated_page

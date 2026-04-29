@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from db import dispose_engine, get_engine
 from models import Base
 from routes.health import router as health_router
+from routes.pages import router as pages_router
 
 
 @asynccontextmanager
@@ -23,6 +24,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(health_router)
+    app.include_router(pages_router)
     return app
 
 
