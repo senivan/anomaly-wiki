@@ -73,6 +73,20 @@ class PageRepository:
     async def get_revision(self, revision_id: UUID) -> RevisionRecord | None:
         return await self.session.get(RevisionRecord, revision_id)
 
+    async def get_revision_for_page(
+        self,
+        *,
+        page_id: UUID,
+        revision_id: UUID,
+    ) -> RevisionRecord | None:
+        result = await self.session.execute(
+            select(RevisionRecord).where(
+                RevisionRecord.id == revision_id,
+                RevisionRecord.page_id == page_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def list_revisions(self, page_id: UUID) -> list[RevisionRecord]:
         result = await self.session.execute(
             select(RevisionRecord)

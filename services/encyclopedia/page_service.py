@@ -103,3 +103,48 @@ class PageService:
         except Exception:
             await self.session.rollback()
             raise
+
+    async def get_page_state(self, page_id: UUID) -> tuple[PageRecord, RevisionRecord | None, RevisionRecord | None]:
+        repository = PageRepository(self.session)
+        page = await repository.get_page(page_id)
+        if page is None:
+            raise PageNotFoundError(f"Page {page_id} was not found.")
+
+        current_draft_revision = None
+        if page.current_draft_revision_id is not None:
+            current_draft_revision = await repository.get_revision(page.current_draft_revision_id)
+
+        current_published_revision = None
+        if page.current_published_revision_id is not None:
+            current_published_revision = await repository.get_revision(page.current_published_revision_id)
+
+        return page, current_draft_revision, current_published_revision
+
+    async def list_page_revisions(self, page_id: UUID) -> tuple[PageRecord, list[RevisionRecord]]:
+        repository = PageRepository(self.session)
+        page = await repository.get_page(page_id)
+        if page is None:
+            raise PageNotFoundError(f"Page {page_id} was not found.")
+
+        revisions = await repository.list_revisions(page.id)
+        return page, revisions
+
+    async def get_page_revision(
+        self,
+        *,
+        page_id: UUID,
+        revision_id: UUID,
+    ) -> tuple[PageRecord, RevisionRecord, list[RevisionRecord]]:
+        repository = PageRepository(self.session)
+        page = await repository.get_page(page_id)
+        if page is None:
+            raise PageNotFoundError(f"Page {page_id} was not found.")
+
+        revision = await repository.get_revision_for_page(page_id=page.id, revision_id=revision_id)
+        if revision is None:
+            raise PageNotFoundError(
+                f"Revision {revision_id} was not found for page {page.id}."
+            )
+
+        lineage = await repository.get_revision_lineage(revision.id)
+        return page, revision, lineage
