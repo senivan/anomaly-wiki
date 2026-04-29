@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 
 from main import create_app
@@ -69,6 +69,19 @@ def add_protected_routes(app: FastAPI) -> None:
             "role": auth.role,
         }
 
+    @router.get("/auth-state")
+    async def auth_state(
+        request: Request,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> dict[str, str | None]:
+        state_auth = request.state.auth
+        return {
+            "sub": state_auth.subject,
+            "email": state_auth.email,
+            "role": state_auth.role,
+            "resolved_sub": auth.subject,
+        }
+
     app.include_router(router)
 
 
@@ -109,6 +122,21 @@ async def test_valid_token_populates_auth_context() -> None:
     assert response.status_code == 200
     assert response.json()["email"] == "user@example.com"
     assert response.json()["role"] == "Researcher"
+
+
+async def test_valid_token_attaches_auth_context_to_request_state() -> None:
+    private_key, jwk = build_auth_keypair()
+    token = issue_token(private_key, role="Researcher")
+    app = create_app(upstream_transport=ASGITransport(app=build_jwks_service(jwk)))
+    add_protected_routes(app)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/auth-state", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "user@example.com"
+    assert response.json()["role"] == "Researcher"
+    assert response.json()["sub"] == response.json()["resolved_sub"]
 
 
 async def test_expired_token_returns_401() -> None:
