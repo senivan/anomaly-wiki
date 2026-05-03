@@ -1,11 +1,15 @@
+import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from opensearchpy import AsyncOpenSearch
+from opensearchpy import ConnectionError as OSConnectionError, TransportError
 
 from config import Settings, get_settings
 from opensearch import get_opensearch_client
 from schemas import SearchHit, SearchResponse, SuggestResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["search"])
 
@@ -80,7 +84,7 @@ def _extract_snippet(highlight: dict) -> str:
 @router.get("/search", response_model=SearchResponse)
 async def search(
     request: Request,
-    q: str,
+    q: Annotated[str, Query(min_length=1, max_length=500)],
     type: Annotated[str | None, Query()] = None,
     visibility: Annotated[str | None, Query()] = None,
     status: Annotated[str | None, Query()] = None,
@@ -101,31 +105,44 @@ async def search(
         tags=tags,
         internal=internal,
     )
-    result = await os_client.search(index=settings.opensearch_index, body=body)
-    total = result["hits"]["total"]["value"]
-    hits = []
-    for raw in result["hits"]["hits"]:
-        src = raw["_source"]
-        snippet = _extract_snippet(raw.get("highlight", {}))
-        hits.append(
-            SearchHit(
-                page_id=src["page_id"],
-                slug=src["slug"],
-                type=src["type"],
-                title=src["title"],
-                summary=src["summary"],
-                snippet=snippet,
-                status=src["status"],
-                visibility=src["visibility"],
+    try:
+        result = await os_client.search(index=settings.opensearch_index, body=body)
+    except OSConnectionError as exc:
+        logger.error("OpenSearch unreachable during search: %r", exc)
+        raise HTTPException(status_code=503, detail="Search index is currently unavailable.")
+    except TransportError as exc:
+        logger.error("OpenSearch transport error during search: status=%s info=%s", exc.status_code, exc.info)
+        raise HTTPException(status_code=502, detail="Search index returned an error.")
+
+    try:
+        total = result["hits"]["total"]["value"]
+        hits = []
+        for raw in result["hits"]["hits"]:
+            src = raw["_source"]
+            snippet = _extract_snippet(raw.get("highlight", {}))
+            hits.append(
+                SearchHit(
+                    page_id=src["page_id"],
+                    slug=src["slug"],
+                    type=src["type"],
+                    title=src["title"],
+                    summary=src["summary"],
+                    snippet=snippet,
+                    status=src["status"],
+                    visibility=src["visibility"],
+                )
             )
-        )
+    except (KeyError, ValueError) as exc:
+        logger.error("Malformed OpenSearch document missing field %s", exc)
+        raise HTTPException(status_code=500, detail="Search index returned a malformed document.")
+
     return SearchResponse(total=total, hits=hits)
 
 
 @router.get("/search/suggest", response_model=SuggestResponse)
 async def suggest(
     request: Request,
-    q: str,
+    q: Annotated[str, Query(min_length=1, max_length=500)],
     type: Annotated[str | None, Query()] = None,
     settings: Settings = Depends(get_settings),
     os_client: AsyncOpenSearch = Depends(get_opensearch_client),
@@ -148,6 +165,19 @@ async def suggest(
         },
         "_source": ["title"],
     }
-    result = await os_client.search(index=settings.opensearch_index, body=body)
-    titles = [h["_source"]["title"] for h in result["hits"]["hits"]]
+    try:
+        result = await os_client.search(index=settings.opensearch_index, body=body)
+    except OSConnectionError as exc:
+        logger.error("OpenSearch unreachable during suggest: %r", exc)
+        raise HTTPException(status_code=503, detail="Search index is currently unavailable.")
+    except TransportError as exc:
+        logger.error("OpenSearch transport error during suggest: status=%s info=%s", exc.status_code, exc.info)
+        raise HTTPException(status_code=502, detail="Search index returned an error.")
+
+    try:
+        titles = [h["_source"]["title"] for h in result["hits"]["hits"]]
+    except (KeyError, ValueError) as exc:
+        logger.error("Malformed OpenSearch document missing field %s in suggest", exc)
+        raise HTTPException(status_code=500, detail="Search index returned a malformed document.")
+
     return SuggestResponse(suggestions=titles)

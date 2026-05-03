@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import FastAPI
@@ -49,3 +50,14 @@ async def test_readiness_returns_503_when_opensearch_ping_raises():
         response = await client.get("/readiness")
     assert response.status_code == 503
     assert response.json()["status"] == "unavailable"
+
+
+async def test_readiness_logs_exception_when_ping_raises(caplog):
+    fake_os = AsyncMock()
+    fake_os.ping.side_effect = Exception("connection refused")
+    app = build_app(fake_os)
+    with caplog.at_level(logging.ERROR, logger="routes.health"):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/readiness")
+    assert response.status_code == 503
+    assert any("connection refused" in r.message for r in caplog.records)

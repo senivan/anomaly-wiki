@@ -73,3 +73,19 @@ async def test_suggest_proxy_forwards_without_auth_for_unauthenticated_request()
     assert response.status_code == 200
     body = response.json()
     assert body["source"] is None
+
+
+async def test_search_proxy_treats_invalid_token_as_anonymous():
+    """A malformed/expired token must not crash the proxy — degrade to anonymous."""
+    upstream = build_upstream_search_app()
+    app = create_app(upstream_transport=ASGITransport(app=upstream))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/search?q=fire",
+            headers={"Authorization": "Bearer thisisnotavalidtoken"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] is None  # forwarded as anonymous
