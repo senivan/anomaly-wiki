@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, Request
+import logging
+
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from opensearch import get_opensearch_client
 
 router = APIRouter(tags=["health"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
@@ -16,7 +19,8 @@ async def readiness(
 ) -> JSONResponse:
     try:
         alive = await os_client.ping()
-    except Exception:
+    except Exception as exc:
+        logger.error("OpenSearch ping failed: %s: %s", type(exc).__name__, exc)
         alive = False
 
     if not alive:

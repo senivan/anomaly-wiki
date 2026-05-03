@@ -7,17 +7,18 @@ from clients.http import (
     forward_request,
 )
 from config import Settings, get_settings
-from security import get_auth_context
+from errors import GatewayAuthError
+from security import AuthContext, get_auth_context
 
 router = APIRouter(tags=["search"])
 
 
-async def _optional_auth(request: Request, settings: Settings):
+async def _optional_auth(request: Request, settings: Settings) -> AuthContext | None:
     if not request.headers.get("Authorization"):
         return None
     try:
         return await get_auth_context(request, settings)
-    except Exception:
+    except GatewayAuthError:
         return None
 
 
