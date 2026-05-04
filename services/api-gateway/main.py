@@ -8,6 +8,7 @@ from errors import register_exception_handlers
 from middleware import register_http_middleware
 from routes.auth import router as auth_router
 from routes.health import router as health_router
+from routes.media import router as media_router
 from routes.search import router as search_router
 from security import JwksCache
 
@@ -33,6 +34,7 @@ def create_app(*, upstream_transport: httpx.AsyncBaseTransport | None = None) ->
     register_exception_handlers(app)
     app.include_router(auth_router)
     app.include_router(health_router)
+    app.include_router(media_router)
     app.include_router(search_router)
     return app
 

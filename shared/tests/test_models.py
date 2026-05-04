@@ -52,7 +52,9 @@ def test_media_asset_validation():
         filename="photo.jpg",
         mime_type="image/jpeg",
         storage_path="/assets/photo.jpg",
-        uploaded_by=user_id
+        uploaded_by=user_id,
+        size_bytes=1024,
+        checksum_sha256="abc123",
     )
     
     assert asset.id == asset_id
