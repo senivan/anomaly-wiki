@@ -105,10 +105,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       ENCYCLOPEDIA_SERVICE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/encyclopedia_db
-    expose:
-      - "8000"
+      ENCYCLOPEDIA_SERVICE_RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672/
+    ports:
+      - "8001:8000"
 
   media-service:
     build:
@@ -153,6 +156,29 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  search-indexer:
+    build:
+      context: .
+      dockerfile: services/search-indexer/Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      encyclopedia-service:
+        condition: service_started
+    environment:
+      SEARCH_INDEXER_RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672/
+      SEARCH_INDEXER_OPENSEARCH_URL: http://opensearch:9200
+      SEARCH_INDEXER_OPENSEARCH_INDEX: anomaly-wiki-pages
+      SEARCH_INDEXER_ENCYCLOPEDIA_URL: http://encyclopedia-service:8000
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    restart: on-failure
 
   api-gateway:
     build:
