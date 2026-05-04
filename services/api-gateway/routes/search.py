@@ -11,6 +11,8 @@ from security import AuthContext, get_auth_context
 
 router = APIRouter(tags=["search"])
 
+SEARCH_FORWARD_STRIP_HEADERS = PROTECTED_FORWARD_STRIP_HEADERS | {"x-internal-token"}
+
 
 async def _optional_auth(request: Request, settings: Settings) -> AuthContext | None:
     if not request.headers.get("Authorization"):
@@ -36,7 +38,7 @@ async def _forward_search(
         upstream_path=upstream_path,
         settings=settings,
         forwarded_headers=forwarded_headers,
-        excluded_headers=PROTECTED_FORWARD_STRIP_HEADERS,
+        excluded_headers=SEARCH_FORWARD_STRIP_HEADERS,
     )
 
 
