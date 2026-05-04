@@ -18,6 +18,9 @@ class ObjectStorage(Protocol):
     ) -> None:
         ...
 
+    async def delete_object(self, *, storage_path: str) -> None:
+        ...
+
     async def presigned_get_url(
         self,
         *,
@@ -50,8 +53,21 @@ class MinioObjectStorage:
         return self._client
 
     def _ensure_bucket(self) -> None:
+        # Guard against a race where two callers both observe the bucket missing
+        # and one of them loses the make_bucket race.
         if not self.client.bucket_exists(self._bucket):
-            self.client.make_bucket(self._bucket)
+            try:
+                self.client.make_bucket(self._bucket)
+            except Exception as exc:
+                # Only swallow the "bucket already exists" race; re-raise
+                # anything else (network timeouts, auth failures, etc.).
+                from minio.error import S3Error
+
+                if not (
+                    isinstance(exc, S3Error)
+                    and exc.code in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists")
+                ):
+                    raise
 
     async def put_object(
         self,
@@ -73,6 +89,12 @@ class MinioObjectStorage:
             )
 
         await anyio.to_thread.run_sync(_put)
+
+    async def delete_object(self, *, storage_path: str) -> None:
+        def _delete() -> None:
+            self.client.remove_object(self._bucket, storage_path)
+
+        await anyio.to_thread.run_sync(_delete)
 
     async def presigned_get_url(
         self,

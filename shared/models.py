@@ -56,7 +56,7 @@ class MediaAsset(BaseModel):
     mime_type: str
     storage_path: str
     uploaded_by: UUID
-    size_bytes: int = 0
-    checksum_sha256: str = ""
+    size_bytes: int
+    checksum_sha256: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
