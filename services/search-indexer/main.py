@@ -1,7 +1,20 @@
-import time
+import asyncio
+import logging
 
-if __name__ == '__main__':
-    print('Search Indexer Placeholder started')
-    while True:
-        time.sleep(10)
+from config import get_settings
+from consumer import run_consumer
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
+
+def main() -> None:
+    settings = get_settings()
+    asyncio.run(run_consumer(settings))
+
+
+if __name__ == "__main__":
+    main()
 
