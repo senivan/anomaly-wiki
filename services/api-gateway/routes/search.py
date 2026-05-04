@@ -7,7 +7,6 @@ from clients.http import (
     forward_request,
 )
 from config import Settings, get_settings
-from errors import GatewayAuthError
 from security import AuthContext, get_auth_context
 
 router = APIRouter(tags=["search"])
@@ -16,10 +15,7 @@ router = APIRouter(tags=["search"])
 async def _optional_auth(request: Request, settings: Settings) -> AuthContext | None:
     if not request.headers.get("Authorization"):
         return None
-    try:
-        return await get_auth_context(request, settings)
-    except GatewayAuthError:
-        return None
+    return await get_auth_context(request, settings)
 
 
 async def _forward_search(
@@ -28,7 +24,11 @@ async def _forward_search(
     settings: Settings,
 ) -> Response:
     auth = await _optional_auth(request, settings)
-    forwarded_headers = build_authenticated_forward_headers(auth) if auth else None
+    forwarded_headers: dict[str, str] | None = None
+    if auth:
+        forwarded_headers = build_authenticated_forward_headers(auth)
+        if settings.search_internal_token:
+            forwarded_headers["X-Internal-Token"] = settings.search_internal_token
     return await forward_request(
         request,
         service="search-service",

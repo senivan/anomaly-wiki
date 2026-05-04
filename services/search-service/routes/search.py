@@ -16,10 +16,17 @@ router = APIRouter(tags=["search"])
 _INTERNAL_ROLES = {"researcher", "editor", "admin"}
 
 
-def _is_internal_request(request: Request) -> bool:
+def _is_internal_request(request: Request, settings: Settings) -> bool:
     source = request.headers.get("x-authenticated-source", "")
     role = request.headers.get("x-authenticated-user-role", "")
-    return source == "api-gateway" and role.lower() in _INTERNAL_ROLES
+    token = request.headers.get("x-internal-token", "")
+    if source != "api-gateway":
+        return False
+    if role.lower() not in _INTERNAL_ROLES:
+        return False
+    if settings.internal_token and token != settings.internal_token:
+        return False
+    return True
 
 
 def _build_search_body(
@@ -94,7 +101,7 @@ async def search(
     settings: Settings = Depends(get_settings),
     os_client: AsyncOpenSearch = Depends(get_opensearch_client),
 ) -> SearchResponse:
-    internal = _is_internal_request(request)
+    internal = _is_internal_request(request, settings)
     body = _build_search_body(
         q=q,
         page=page,
@@ -147,7 +154,7 @@ async def suggest(
     settings: Settings = Depends(get_settings),
     os_client: AsyncOpenSearch = Depends(get_opensearch_client),
 ) -> SuggestResponse:
-    internal = _is_internal_request(request)
+    internal = _is_internal_request(request, settings)
     filters: list[dict] = []
     if not internal:
         filters.append({"term": {"visibility": "Public"}})
@@ -159,7 +166,15 @@ async def suggest(
         "size": 10,
         "query": {
             "bool": {
-                "must": [{"match_phrase_prefix": {"title": {"query": q}}}],
+                "must": [
+                    {
+                        "multi_match": {
+                            "query": q,
+                            "fields": ["title", "aliases"],
+                            "type": "phrase_prefix",
+                        }
+                    }
+                ],
                 "filter": filters,
             }
         },

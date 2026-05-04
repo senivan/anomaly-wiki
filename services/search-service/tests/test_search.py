@@ -41,6 +41,8 @@ async def test_search_applies_public_filter_when_no_auth_source_header():
     assert filter_terms.get("status") == "Published"
 
 
+# No X-Internal-Token is sent; internal_token defaults to "" so the token
+# check is skipped and the request is treated as internal based on headers alone.
 async def test_search_omits_visibility_filter_for_researcher():
     app, fake_os = build_search_app(make_os_response([]))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -146,6 +148,8 @@ async def test_suggest_applies_public_filter_for_anonymous():
     assert filter_terms.get("status") == "Published"
 
 
+# No X-Internal-Token is sent; internal_token defaults to "" so the token
+# check is skipped and the request is treated as internal based on headers alone.
 async def test_suggest_omits_public_filter_for_researcher():
     app, fake_os = build_search_app(make_os_response([]))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -259,6 +263,20 @@ async def test_suggest_returns_422_when_q_is_empty_string():
     assert response.status_code == 422
 
 
+async def test_suggest_query_includes_aliases_field():
+    """Suggest must search aliases as well as title so alias-matched pages appear."""
+    app, fake_os = build_search_app(make_os_response([]))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.get("/search/suggest?q=bloodsucker")
+
+    call_args = fake_os.search.call_args
+    query_body = call_args.kwargs["body"]
+    must_clause = query_body["query"]["bool"]["must"][0]
+    assert "multi_match" in must_clause, "suggest must use multi_match, not single-field match"
+    fields = must_clause["multi_match"]["fields"]
+    assert any("aliases" in f for f in fields), "aliases must be included in suggest fields"
+
+
 async def test_search_falls_back_to_summary_snippet_when_content_text_absent():
     """Snippet should use summary highlight when content_text highlight is absent."""
     os_response = {
@@ -354,3 +372,60 @@ async def test_search_applies_status_filter_for_internal_request_when_provided()
         for f in filters if "term" in f
     }
     assert filter_terms.get("status") == "Draft"
+
+
+async def test_search_treats_as_public_when_internal_token_mismatch():
+    """Headers with wrong token must be treated as a public (not internal) request."""
+    from config import Settings, get_settings
+
+    app, fake_os = build_search_app(make_os_response([]))
+    patched_settings = Settings(internal_token="secret-abc")
+    app.dependency_overrides[get_settings] = lambda: patched_settings
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.get(
+                "/search?q=fire",
+                headers={
+                    "X-Authenticated-Source": "api-gateway",
+                    "X-Authenticated-User-Role": "Researcher",
+                    "X-Internal-Token": "WRONG_TOKEN",
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    call_args = fake_os.search.call_args
+    filters = call_args.kwargs["body"]["query"]["bool"]["filter"]
+    filter_terms = {
+        list(f.get("term", {}).keys())[0]: list(f.get("term", {}).values())[0]
+        for f in filters if "term" in f
+    }
+    assert filter_terms.get("visibility") == "Public"
+    assert filter_terms.get("status") == "Published"
+
+
+async def test_search_treats_as_internal_when_token_matches():
+    """Headers with correct token must be treated as an internal request."""
+    from config import Settings, get_settings
+
+    app, fake_os = build_search_app(make_os_response([]))
+    patched_settings = Settings(internal_token="secret-abc")
+    app.dependency_overrides[get_settings] = lambda: patched_settings
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.get(
+                "/search?q=fire",
+                headers={
+                    "X-Authenticated-Source": "api-gateway",
+                    "X-Authenticated-User-Role": "Researcher",
+                    "X-Internal-Token": "secret-abc",
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    call_args = fake_os.search.call_args
+    filters = call_args.kwargs["body"]["query"]["bool"]["filter"]
+    filter_keys = [list(f.get("term", {}).keys())[0] for f in filters if "term" in f]
+    assert "visibility" not in filter_keys
+    assert "status" not in filter_keys
