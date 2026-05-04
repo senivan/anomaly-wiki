@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     encyclopedia_base_url: AnyHttpUrl = "http://encyclopedia-service:8000"
     media_service_base_url: AnyHttpUrl = "http://media-service:8000"
     search_service_base_url: AnyHttpUrl = "http://search-service:8000"
+    search_internal_token: str = ""
     cors_allowed_origins: list[str] = ["*"]
     cors_allowed_methods: list[str] = ["*"]
     cors_allowed_headers: list[str] = ["*"]

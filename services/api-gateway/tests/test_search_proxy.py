@@ -75,8 +75,8 @@ async def test_suggest_proxy_forwards_without_auth_for_unauthenticated_request()
     assert body["source"] is None
 
 
-async def test_search_proxy_treats_invalid_token_as_anonymous():
-    """A malformed/expired token must not crash the proxy — degrade to anonymous."""
+async def test_search_proxy_returns_401_for_invalid_token():
+    """An invalid bearer token must return 401, not silently degrade to anonymous."""
     upstream = build_upstream_search_app()
     app = create_app(upstream_transport=ASGITransport(app=upstream))
 
@@ -86,6 +86,6 @@ async def test_search_proxy_treats_invalid_token_as_anonymous():
             headers={"Authorization": "Bearer thisisnotavalidtoken"},
         )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["source"] is None  # forwarded as anonymous
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+    assert response.json()["error"]["code"] == "invalid_token"

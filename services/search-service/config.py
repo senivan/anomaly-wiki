@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     port: int = 8000
     opensearch_url: AnyHttpUrl = "http://opensearch:9200"
     opensearch_index: str = "anomaly-wiki-pages"
+    internal_token: str = ""
 
     model_config = SettingsConfigDict(
         env_prefix="SEARCH_SERVICE_",
