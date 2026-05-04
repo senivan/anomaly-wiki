@@ -76,6 +76,11 @@ async def upload_media(
         raise HTTPException(status_code=400, detail="Authenticated user id must be a UUID.") from exc
 
     data = await file.read(settings.max_upload_bytes + 1)
+    # NOTE: The entire file is buffered in memory (up to max_upload_bytes + 1
+    # bytes) before being written to object storage. This is adequate for the
+    # configured default limit (50 MB) but would need to become a streaming
+    # read-and-hash pipeline if the limit is raised significantly or concurrent
+    # upload volume is high.
     if not data:
         raise HTTPException(status_code=400, detail="Uploaded file must not be empty.")
     if len(data) > settings.max_upload_bytes:
@@ -106,6 +111,10 @@ async def upload_media(
         data=data,
         content_type=mime_type,
     )
+    # NOTE: put_object is not idempotent with respect to asset_id. If a client
+    # retries after a timeout the object is overwritten (safe), but a fresh
+    # DB insert for the same asset_id will fail on the unique constraint.
+    # Callers are expected to generate a new asset_id on each retry attempt.
 
     repository = MediaAssetRepository(session)
     try:
@@ -126,6 +135,8 @@ async def upload_media(
             await storage_backend.delete_object(storage_path=storage_path)
         except Exception:
             logger.exception("Failed to clean up orphaned object %s after DB error", storage_path)
+            # The blob will remain unreferenced in object storage. A periodic
+            # garbage-collection job or manual cleanup is needed to recover it.
         raise
 
     return MediaAssetResponse.model_validate(asset)
@@ -169,6 +180,10 @@ async def get_media_download_url(
     )
 
     if settings.public_storage_base_url:
+        # Rewrites the internal storage hostname (e.g. minio:9000) to the
+        # externally-reachable base URL. The public endpoint must serve the
+        # same bucket namespace and path structure as the internal MinIO
+        # endpoint (e.g. a reverse proxy or MinIO exposed on a public port).
         url = _rewrite_url_for_public_access(url, settings.public_storage_base_url)
 
     return SignedDownloadUrlResponse(

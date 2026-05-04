@@ -59,10 +59,15 @@ class MinioObjectStorage:
             try:
                 self.client.make_bucket(self._bucket)
             except Exception as exc:
-                # If the bucket already exists the error is harmless; re-raise
-                # anything else.
-                if not self.client.bucket_exists(self._bucket):
-                    raise exc
+                # Only swallow the "bucket already exists" race; re-raise
+                # anything else (network timeouts, auth failures, etc.).
+                from minio.error import S3Error
+
+                if not (
+                    isinstance(exc, S3Error)
+                    and exc.code in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists")
+                ):
+                    raise
 
     async def put_object(
         self,
