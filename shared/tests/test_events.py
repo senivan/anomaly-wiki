@@ -56,7 +56,9 @@ def test_media_metadata_updated_event_validation():
         filename="test.jpg",
         mime_type="image/jpeg",
         storage_path="path/to/test.jpg",
-        uploaded_by=uuid4()
+        uploaded_by=uuid4(),
+        size_bytes=2048,
+        checksum_sha256="deadbeef",
     )
     event = MediaMetadataUpdatedEvent(asset=asset)
     assert event.asset.id == asset.id

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 from hashlib import sha256
 from pathlib import PurePath
+from urllib.parse import urlparse, urlunparse
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile, status
@@ -13,7 +15,13 @@ from repository import MediaAssetRepository
 from schemas import MediaAssetResponse, SignedDownloadUrlResponse
 from storage import ObjectStorage
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/media", tags=["media"])
+
+_GATEWAY_SOURCE = "api-gateway"
+_MAX_FILENAME_LEN = 255
+_MAX_STORAGE_PATH_LEN = 1024
 
 
 def _safe_filename(filename: str | None) -> str:
@@ -23,15 +31,40 @@ def _safe_filename(filename: str | None) -> str:
     return name or "upload.bin"
 
 
+def _rewrite_url_for_public_access(url: str, public_base_url: str) -> str:
+    """Replace the scheme+host of a presigned URL with the public base URL."""
+    parsed = urlparse(url)
+    public_parsed = urlparse(public_base_url)
+    rewritten = parsed._replace(scheme=public_parsed.scheme, netloc=public_parsed.netloc)
+    return urlunparse(rewritten)
+
+
 async def get_storage(request: Request) -> ObjectStorage:
     return request.app.state.storage_backend
 
 
-@router.post("", response_model=MediaAssetResponse, status_code=status.HTTP_201_CREATED)
+def verify_gateway_source(
+    authenticated_source: str | None = Header(default=None, alias="X-Authenticated-Source"),
+) -> None:
+    """Reject requests that did not originate from api-gateway."""
+    if authenticated_source != _GATEWAY_SOURCE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Requests must originate from api-gateway.",
+        )
+
+
+@router.post(
+    "",
+    response_model=MediaAssetResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(verify_gateway_source)],
+)
 async def upload_media(
     file: UploadFile,
     request: Request,
     uploaded_by_header: str | None = Header(default=None, alias="X-Authenticated-User-Id"),
+    settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_async_session),
     storage_backend: ObjectStorage = Depends(get_storage),
 ) -> MediaAssetResponse:
@@ -42,9 +75,14 @@ async def upload_media(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Authenticated user id must be a UUID.") from exc
 
-    data = await file.read()
+    data = await file.read(settings.max_upload_bytes + 1)
     if not data:
         raise HTTPException(status_code=400, detail="Uploaded file must not be empty.")
+    if len(data) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Upload exceeds the maximum allowed size of {settings.max_upload_bytes} bytes.",
+        )
 
     asset_id = uuid4()
     filename = _safe_filename(file.filename)
@@ -52,13 +90,25 @@ async def upload_media(
     storage_path = f"assets/{asset_id}/{filename}"
     checksum = sha256(data).hexdigest()
 
+    if len(filename) > _MAX_FILENAME_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Filename exceeds the maximum allowed length of {_MAX_FILENAME_LEN} characters.",
+        )
+    if len(storage_path) > _MAX_STORAGE_PATH_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Derived storage path exceeds the maximum allowed length of {_MAX_STORAGE_PATH_LEN} characters.",
+        )
+
+    await storage_backend.put_object(
+        storage_path=storage_path,
+        data=data,
+        content_type=mime_type,
+    )
+
     repository = MediaAssetRepository(session)
     try:
-        await storage_backend.put_object(
-            storage_path=storage_path,
-            data=data,
-            content_type=mime_type,
-        )
         asset = await repository.create_asset(
             asset_id=asset_id,
             filename=filename,
@@ -72,12 +122,20 @@ async def upload_media(
         await session.refresh(asset)
     except Exception:
         await session.rollback()
+        try:
+            await storage_backend.delete_object(storage_path=storage_path)
+        except Exception:
+            logger.exception("Failed to clean up orphaned object %s after DB error", storage_path)
         raise
 
     return MediaAssetResponse.model_validate(asset)
 
 
-@router.get("/{asset_id}", response_model=MediaAssetResponse)
+@router.get(
+    "/{asset_id}",
+    response_model=MediaAssetResponse,
+    dependencies=[Depends(verify_gateway_source)],
+)
 async def get_media_asset(
     asset_id: UUID,
     session: AsyncSession = Depends(get_async_session),
@@ -89,7 +147,11 @@ async def get_media_asset(
     return MediaAssetResponse.model_validate(asset)
 
 
-@router.get("/{asset_id}/download-url", response_model=SignedDownloadUrlResponse)
+@router.get(
+    "/{asset_id}/download-url",
+    response_model=SignedDownloadUrlResponse,
+    dependencies=[Depends(verify_gateway_source)],
+)
 async def get_media_download_url(
     asset_id: UUID,
     settings: Settings = Depends(get_settings),
@@ -105,6 +167,10 @@ async def get_media_download_url(
         storage_path=asset.storage_path,
         expires_in_seconds=settings.signed_url_ttl_seconds,
     )
+
+    if settings.public_storage_base_url:
+        url = _rewrite_url_for_public_access(url, settings.public_storage_base_url)
+
     return SignedDownloadUrlResponse(
         asset_id=asset.id,
         url=url,

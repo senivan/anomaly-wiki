@@ -126,8 +126,8 @@ services:
       MEDIA_SERVICE_OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
       MEDIA_SERVICE_OBJECT_STORAGE_BUCKET: anomaly-media
       MEDIA_SERVICE_OBJECT_STORAGE_SECURE: "false"
-    ports:
-      - "8002:8000"
+    expose:
+      - "8000"
   search-service:
     build:
       context: .

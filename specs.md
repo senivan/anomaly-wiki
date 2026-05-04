@@ -84,3 +84,7 @@ ANOMALY-WIKI is an interactive, microservice-based encyclopedia dedicated to the
 - `mime_type`: String
 - `storage_path`: String
 - `uploaded_by`: UUID
+- `size_bytes`: Integer
+- `checksum_sha256`: String (hex-encoded SHA-256 of the raw file bytes)
+- `created_at`: Timestamp
+- `updated_at`: Timestamp
