@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     auth_expected_audience: str = "fastapi-users:auth"
     auth_jwt_algorithm: str = "RS256"
     auth_jwks_cache_ttl_seconds: int = 300
+    media_upload_max_bytes: int = 25 * 1024 * 1024
 
     model_config = SettingsConfigDict(
         env_prefix="API_GATEWAY_",
