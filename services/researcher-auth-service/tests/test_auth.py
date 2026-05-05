@@ -4,6 +4,15 @@ from httpx import AsyncClient, ASGITransport
 from auth.keys import load_keys
 
 @pytest.mark.asyncio
+async def test_healthcheck(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.asyncio
 async def test_jwks(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.get("/auth/jwks")
