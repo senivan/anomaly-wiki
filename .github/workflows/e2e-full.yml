@@ -69,7 +69,7 @@ jobs:
           python -m pip install -r e2e/requirements.txt
 
       - name: Run full E2E tests
-        run: python -m pytest -ra e2e/full
+        run: python -m pytest -ra e2e/full --e2e-report-path e2e-artifacts/e2e-full-report.md
 
       - name: Collect compose diagnostics
         if: always()
@@ -87,6 +87,14 @@ jobs:
         with:
           name: e2e-full-diagnostics
           path: e2e-artifacts
+
+      - name: Upload E2E markdown report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-full-report
+          path: e2e-artifacts/e2e-full-report.md
+          if-no-files-found: warn
 
       - name: Stop stack
         if: always()

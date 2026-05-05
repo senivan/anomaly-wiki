@@ -10,7 +10,7 @@ lifecycle:
 ```bash
 COMPOSE_PROJECT_NAME=anomaly-wiki-e2e docker compose up -d --build
 python -m pip install -r e2e/requirements.txt
-python -m pytest -ra e2e
+python -m pytest -ra e2e --e2e-report-path e2e-artifacts/e2e-smoke-report.md
 COMPOSE_PROJECT_NAME=anomaly-wiki-e2e docker compose down -v --remove-orphans
 ```
 
@@ -24,3 +24,16 @@ Page-to-search indexing coverage is present but skipped by default because
 ```bash
 E2E_ENABLE_SEARCH_INDEXING=1 python -m pytest -ra e2e/test_search_indexing_e2e.py
 ```
+
+Each E2E run can emit a markdown summary report (pass/fail per test) via
+`--e2e-report-path`:
+
+```bash
+python -m pytest -ra e2e --e2e-report-path e2e-artifacts/e2e-smoke-report.md
+```
+
+Report contract:
+- includes suite metadata (start/end time, collected/executed counts, exit status)
+- summarizes passed/failed/skipped counts
+- lists every executed test with outcome, phase, and duration
+- includes failure details for failed tests

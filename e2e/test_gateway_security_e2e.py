@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 
 async def test_page_routes_reject_missing_and_invalid_tokens(
@@ -80,3 +81,60 @@ async def test_media_upload_rejects_oversized_payload_before_forwarding(
 
     assert response.status_code == 413, response.text
     assert response.json()["error"]["code"] == "media_upload_too_large"
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("GET", "/pages/11111111-1111-1111-1111-111111111111/revisions", None),
+        (
+            "GET",
+            "/pages/11111111-1111-1111-1111-111111111111/revisions/22222222-2222-2222-2222-222222222222",
+            None,
+        ),
+        (
+            "POST",
+            "/pages/11111111-1111-1111-1111-111111111111/publish",
+            {
+                "expected_page_version": 2,
+                "revision_id": "22222222-2222-2222-2222-222222222222",
+            },
+        ),
+        (
+            "POST",
+            "/pages/11111111-1111-1111-1111-111111111111/status",
+            {
+                "expected_page_version": 2,
+                "status": "Review",
+            },
+        ),
+    ],
+)
+async def test_additional_page_routes_require_bearer_token(
+    gateway_client: httpx.AsyncClient,
+    method: str,
+    path: str,
+    payload: dict | None,
+) -> None:
+    response = await gateway_client.request(method, path, json=payload)
+    assert response.status_code == 401, response.text
+    assert response.json()["error"]["code"] == "missing_bearer_token"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/search?q=burner",
+        "/search/suggest?q=burn",
+    ],
+)
+async def test_search_endpoints_reject_invalid_bearer_tokens(
+    gateway_client: httpx.AsyncClient,
+    path: str,
+) -> None:
+    response = await gateway_client.get(
+        path,
+        headers={"Authorization": "Bearer invalid-token"},
+    )
+    assert response.status_code == 401, response.text
+    assert response.json()["error"]["code"] == "invalid_token"
