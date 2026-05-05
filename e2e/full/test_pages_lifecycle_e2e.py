@@ -68,7 +68,10 @@ async def test_full_page_lifecycle_and_revision_reads(
     assert revision_response.status_code == 200, revision_response.text
     revision_body = revision_response.json()
     assert revision_body["revision"]["title"] == "E2E Lifecycle Incident Draft"
-    assert revision_body["lineage"][0]["id"] == first_revision_id
+    assert [revision["id"] for revision in revision_body["lineage"]] == [
+        draft["revision"]["id"],
+        first_revision_id,
+    ]
 
     revert_response = await gateway_client.post(
         f"/pages/{page_id}/revert",
