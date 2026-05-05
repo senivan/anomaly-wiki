@@ -4,6 +4,14 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/e2e-smoke.yml"
+      - "docker-compose.yml"
+      - "e2e/**"
+      - "init-db.sql"
+      - "services/**"
+      - "shared/**"
 
 permissions:
   contents: read
