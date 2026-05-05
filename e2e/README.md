@@ -8,13 +8,19 @@ The GitHub Actions workflow `.github/workflows/e2e-smoke.yml` owns the CI
 lifecycle:
 
 ```bash
-docker compose up -d --build
+COMPOSE_PROJECT_NAME=anomaly-wiki-e2e docker compose up -d --build
 python -m pip install -r e2e/requirements.txt
-python -m pytest e2e
-docker compose down -v --remove-orphans
+python -m pytest -ra e2e
+COMPOSE_PROJECT_NAME=anomaly-wiki-e2e docker compose down -v --remove-orphans
 ```
 
-The first smoke test covers auth, encyclopedia page mutations, media upload and
-metadata reads, and search-service reachability through the gateway. It does not
-assert page-to-search indexing because `search-indexer` is not part of the
-current `main` compose stack.
+Coverage includes auth, encyclopedia page mutations, media upload and metadata
+reads, gateway negative-auth checks, readiness checks, and search-service
+reachability through the gateway.
+
+Page-to-search indexing coverage is present but skipped by default because
+`search-indexer` is not part of the current `main` compose stack. Enable it with:
+
+```bash
+E2E_ENABLE_SEARCH_INDEXING=1 python -m pytest -ra e2e/test_search_indexing_e2e.py
+```
