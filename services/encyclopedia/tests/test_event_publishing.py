@@ -110,3 +110,59 @@ async def test_transition_status_publishes_status_changed_event(tmp_path, monkey
     body = call_args.args[1]
     assert body["page_id"] == page_id
     assert body["new_status"] == "Review"
+
+
+async def test_create_page_succeeds_even_when_publisher_raises(tmp_path, monkeypatch):
+    app, mock_publisher = await create_test_app_with_mock_publisher(tmp_path, monkeypatch)
+    mock_publisher.publish.side_effect = Exception("RabbitMQ unavailable")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/pages",
+            json={
+                "slug": "resilient-page",
+                "type": "Anomaly",
+                "visibility": "Public",
+                "title": "Resilient Page",
+                "summary": "Should not fail.",
+                "content": "Even if MQ is down.",
+            },
+        )
+
+    assert response.status_code == 201
+
+
+async def test_update_metadata_publishes_metadata_updated_event(tmp_path, monkeypatch):
+    app, mock_publisher = await create_test_app_with_mock_publisher(tmp_path, monkeypatch)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        create_resp = await client.post(
+            "/pages",
+            json={
+                "slug": "meta-test",
+                "type": "Anomaly",
+                "visibility": "Public",
+                "title": "Meta Test",
+                "summary": "Testing metadata.",
+                "content": "Content.",
+            },
+        )
+        page_id = create_resp.json()["page"]["id"]
+        page_version = create_resp.json()["page"]["version"]
+
+        mock_publisher.reset_mock()
+
+        await client.put(
+            f"/pages/{page_id}/metadata",
+            json={
+                "expected_page_version": page_version,
+                "tags": ["new-tag"],
+                "classifications": [],
+                "related_page_ids": [],
+                "media_asset_ids": [],
+            },
+        )
+
+    mock_publisher.publish.assert_called_once()
+    call_args = mock_publisher.publish.call_args
+    assert call_args.args[0] == "page.metadata_updated"
+    assert call_args.args[1]["page_id"] == page_id
