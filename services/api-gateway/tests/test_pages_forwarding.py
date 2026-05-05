@@ -78,7 +78,7 @@ def build_upstream_pages_app() -> FastAPI:
     return app
 
 
-async def test_public_page_read_is_forwarded_without_auth_headers() -> None:
+async def test_unauthenticated_page_read_returns_401() -> None:
     page_id = "11111111-1111-1111-1111-111111111111"
     upstream = build_upstream_pages_app()
     app = create_app(upstream_transport=ASGITransport(app=upstream))
@@ -92,13 +92,8 @@ async def test_public_page_read_is_forwarded_without_auth_headers() -> None:
             },
         )
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "page_id": page_id,
-        "source": None,
-        "role": None,
-        "authorization": None,
-    }
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "missing_bearer_token"
 
 
 async def test_page_read_with_auth_injects_gateway_identity_headers() -> None:
@@ -141,7 +136,7 @@ async def test_page_read_with_invalid_token_returns_401() -> None:
     assert response.json()["error"]["code"] == "invalid_token"
 
 
-async def test_public_page_revision_routes_are_forwarded() -> None:
+async def test_unauthenticated_page_revision_routes_return_401() -> None:
     page_id = "11111111-1111-1111-1111-111111111111"
     revision_id = "22222222-2222-2222-2222-222222222222"
     upstream = build_upstream_pages_app()
@@ -151,10 +146,10 @@ async def test_public_page_revision_routes_are_forwarded() -> None:
         revisions_response = await client.get(f"/pages/{page_id}/revisions")
         revision_response = await client.get(f"/pages/{page_id}/revisions/{revision_id}")
 
-    assert revisions_response.status_code == 200
-    assert revisions_response.json() == {"page_id": page_id, "revisions": []}
-    assert revision_response.status_code == 200
-    assert revision_response.json() == {"page_id": page_id, "revision_id": revision_id}
+    assert revisions_response.status_code == 401
+    assert revisions_response.json()["error"]["code"] == "missing_bearer_token"
+    assert revision_response.status_code == 401
+    assert revision_response.json()["error"]["code"] == "missing_bearer_token"
 
 
 async def test_protected_page_write_requires_authentication() -> None:
