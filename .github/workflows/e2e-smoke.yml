@@ -86,13 +86,16 @@ jobs:
           name: e2e-diagnostics
           path: e2e-artifacts
 
-      - name: Upload E2E markdown report
+      - name: Publish E2E markdown report to job summary
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-smoke-report
-          path: e2e-artifacts/e2e-smoke-report.md
-          if-no-files-found: warn
+        run: |
+          if [ -f e2e-artifacts/e2e-smoke-report.md ]; then
+            cat e2e-artifacts/e2e-smoke-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## E2E Test Report" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Report file not found: e2e-artifacts/e2e-smoke-report.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Stop stack
         if: always()
