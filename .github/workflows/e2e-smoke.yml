@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/e2e-smoke.yml"
+      - ".github/workflows/e2e-full.yml"
       - "docker-compose.yml"
       - "e2e/**"
       - "init-db.sql"
@@ -67,7 +68,7 @@ jobs:
           python -m pip install -r e2e/requirements.txt
 
       - name: Run E2E smoke tests
-        run: python -m pytest -ra e2e --e2e-report-path e2e-artifacts/e2e-smoke-report.md
+        run: python -m pytest -ra e2e --ignore=e2e/full --e2e-report-path e2e-artifacts/e2e-smoke-report.md
 
       - name: Collect compose diagnostics
         if: always()
