@@ -4,6 +4,9 @@ from uuid import uuid4
 
 import httpx
 
+OPENSEARCH_BASE_URL = "http://localhost:9200"
+OPENSEARCH_INDEX = "anomaly-wiki-pages"
+
 
 async def register_and_login(
     client: httpx.AsyncClient,
@@ -82,3 +85,44 @@ async def create_published_page(
     published = publish_response.json()
     published["e2e_slug"] = slug
     return published
+
+
+async def seed_search_document(
+    document: dict,
+    *,
+    doc_id: str | None = None,
+) -> str:
+    doc_id = doc_id or document["page_id"]
+    async with httpx.AsyncClient(base_url=OPENSEARCH_BASE_URL, timeout=20.0) as client:
+        response = await client.put(f"/{OPENSEARCH_INDEX}/_doc/{doc_id}", json=document)
+        assert response.status_code in {200, 201}, response.text
+        refresh_response = await client.post(f"/{OPENSEARCH_INDEX}/_refresh")
+        assert refresh_response.status_code == 200, refresh_response.text
+    return doc_id
+
+
+def search_document(
+    *,
+    page_id: str | None = None,
+    slug: str | None = None,
+    title: str = "E2E Seeded Burner",
+    status: str = "Published",
+    visibility: str = "Public",
+    tags: list[str] | None = None,
+    type_: str = "Anomaly",
+    aliases: list[str] | None = None,
+) -> dict:
+    page_id = page_id or str(uuid4())
+    slug = slug or f"e2e-search-{uuid4().hex[:8]}"
+    return {
+        "page_id": page_id,
+        "slug": slug,
+        "type": type_,
+        "status": status,
+        "visibility": visibility,
+        "tags": tags or ["e2e"],
+        "title": title,
+        "summary": f"Search fixture for {title}",
+        "content_text": f"{title} searchable content for the full E2E suite.",
+        "aliases": aliases or [],
+    }
