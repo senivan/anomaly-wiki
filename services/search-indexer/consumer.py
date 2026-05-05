@@ -15,6 +15,7 @@ from indexer import delete_page, upsert_page
 logger = logging.getLogger(__name__)
 
 _UPSERT_ROUTING_KEYS = {"page.created", "page.revision_created", "page.published", "page.metadata_updated"}
+_TERMINAL_STATUSES = {"Archived", "Redacted"}
 
 
 async def _handle_message(
@@ -30,10 +31,10 @@ async def _handle_message(
     elif routing_key == "page.status_changed":
         page_id = UUID(body["page_id"])
         new_status = body["new_status"]
-        if new_status == "Published":
-            await upsert_page(page_id, encyclopedia, os_client, index)
-        else:
+        if new_status in _TERMINAL_STATUSES:
             await delete_page(page_id, os_client, index)
+        else:
+            await upsert_page(page_id, encyclopedia, os_client, index)
     else:
         logger.debug("Ignored routing key: %s", routing_key)
 
@@ -57,15 +58,29 @@ async def run_consumer(settings: Settings) -> None:
 
             async with queue.iterator() as queue_iter:
                 async for message in queue_iter:
-                    async with message.process(requeue=True):
+                    try:
                         body = json.loads(message.body)
-                        await _handle_message(
-                            routing_key=message.routing_key,
-                            body=body,
-                            encyclopedia=encyclopedia,
-                            os_client=os_client,
-                            index=settings.opensearch_index,
-                        )
+                    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                        logger.error("Malformed message body, rejecting: %s", exc)
+                        await message.reject(requeue=False)
+                        continue
+
+                    async with message.process(requeue=True, ignore_processed=True):
+                        try:
+                            await _handle_message(
+                                routing_key=message.routing_key,
+                                body=body,
+                                encyclopedia=encyclopedia,
+                                os_client=os_client,
+                                index=settings.opensearch_index,
+                            )
+                        except (KeyError, ValueError) as exc:
+                            logger.error(
+                                "Invalid message schema for routing key %s, rejecting: %s",
+                                message.routing_key,
+                                exc,
+                            )
+                            await message.reject(requeue=False)
     finally:
         await http_client.aclose()
         await os_client.close()

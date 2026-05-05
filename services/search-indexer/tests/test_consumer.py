@@ -108,7 +108,7 @@ async def test_unknown_routing_key_is_noop():
         mock_delete.assert_not_called()
 
 
-async def test_status_changed_to_draft_triggers_delete():
+async def test_status_changed_to_draft_triggers_upsert():
     page_id = uuid4()
     with patch("consumer.upsert_page", new_callable=AsyncMock) as mock_upsert, \
          patch("consumer.delete_page", new_callable=AsyncMock) as mock_delete:
@@ -119,11 +119,11 @@ async def test_status_changed_to_draft_triggers_delete():
             os_client=AsyncMock(),
             index="test-index",
         )
-        mock_delete.assert_called_once_with(page_id, ANY, "test-index")
-        mock_upsert.assert_not_called()
+        mock_upsert.assert_called_once_with(page_id, ANY, ANY, "test-index")
+        mock_delete.assert_not_called()
 
 
-async def test_status_changed_to_review_triggers_delete():
+async def test_status_changed_to_review_triggers_upsert():
     page_id = uuid4()
     with patch("consumer.upsert_page", new_callable=AsyncMock) as mock_upsert, \
          patch("consumer.delete_page", new_callable=AsyncMock) as mock_delete:
@@ -134,8 +134,8 @@ async def test_status_changed_to_review_triggers_delete():
             os_client=AsyncMock(),
             index="test-index",
         )
-        mock_delete.assert_called_once_with(page_id, ANY, "test-index")
-        mock_upsert.assert_not_called()
+        mock_upsert.assert_called_once_with(page_id, ANY, ANY, "test-index")
+        mock_delete.assert_not_called()
 
 
 async def test_metadata_updated_event_triggers_upsert():
