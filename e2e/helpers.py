@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Mapping
+from time import monotonic
 from uuid import uuid4
 
 import httpx
@@ -126,3 +129,54 @@ def search_document(
         "content_text": f"{title} searchable content for the full E2E suite.",
         "aliases": aliases or [],
     }
+
+
+async def wait_for_search_hit(
+    client: httpx.AsyncClient,
+    *,
+    slug: str,
+    q: str,
+    headers: Mapping[str, str] | None = None,
+    params: Mapping[str, str] | None = None,
+    timeout_seconds: float = 60.0,
+    interval_seconds: float = 2.0,
+) -> dict:
+    deadline = monotonic() + timeout_seconds
+    last_body: dict | None = None
+    query_params = {"q": q, **dict(params or {})}
+
+    while monotonic() <= deadline:
+        response = await client.get("/search", headers=headers, params=query_params)
+        assert response.status_code == 200, response.text
+        last_body = response.json()
+        for hit in last_body["hits"]:
+            if hit["slug"] == slug:
+                return hit
+        await asyncio.sleep(interval_seconds)
+
+    raise AssertionError(f"Search hit for slug {slug} did not appear. Last body: {last_body}")
+
+
+async def wait_for_search_absence(
+    client: httpx.AsyncClient,
+    *,
+    slug: str,
+    q: str,
+    headers: Mapping[str, str] | None = None,
+    params: Mapping[str, str] | None = None,
+    timeout_seconds: float = 60.0,
+    interval_seconds: float = 2.0,
+) -> None:
+    deadline = monotonic() + timeout_seconds
+    last_body: dict | None = None
+    query_params = {"q": q, **dict(params or {})}
+
+    while monotonic() <= deadline:
+        response = await client.get("/search", headers=headers, params=query_params)
+        assert response.status_code == 200, response.text
+        last_body = response.json()
+        if all(hit["slug"] != slug for hit in last_body["hits"]):
+            return
+        await asyncio.sleep(interval_seconds)
+
+    raise AssertionError(f"Search hit for slug {slug} still appeared. Last body: {last_body}")
