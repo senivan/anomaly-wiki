@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
+import os
+import shutil
+import subprocess
 from time import monotonic
 from uuid import uuid4
 
 import httpx
+import pytest
 
 OPENSEARCH_BASE_URL = "http://localhost:9200"
 OPENSEARCH_INDEX = "anomaly-wiki-pages"
+MINIO_HEALTH_URL = "http://localhost:9000/minio/health/live"
 
 
 async def register_and_login(
@@ -180,3 +185,152 @@ async def wait_for_search_absence(
         await asyncio.sleep(interval_seconds)
 
     raise AssertionError(f"Search hit for slug {slug} still appeared. Last body: {last_body}")
+
+
+def assert_gateway_error(response: httpx.Response, status_code: int, code: str) -> dict:
+    assert response.status_code == status_code, response.text
+    body = response.json()
+    assert body["error"]["code"] == code
+    return body
+
+
+async def wait_for_gateway_ready(
+    client: httpx.AsyncClient,
+    *,
+    timeout_seconds: float = 90.0,
+    interval_seconds: float = 2.0,
+) -> dict:
+    deadline = monotonic() + timeout_seconds
+    last_body: dict | None = None
+
+    while monotonic() <= deadline:
+        response = await client.get("/ready")
+        if response.status_code == 200:
+            body = response.json()
+            if body["status"] == "ok":
+                return body
+            last_body = body
+        else:
+            try:
+                last_body = response.json()
+            except ValueError:
+                last_body = {"body": response.text}
+        await asyncio.sleep(interval_seconds)
+
+    raise AssertionError(f"Gateway did not become ready. Last body: {last_body}")
+
+
+async def wait_for_gateway_degraded(
+    client: httpx.AsyncClient,
+    *,
+    service_name: str,
+    timeout_seconds: float = 60.0,
+    interval_seconds: float = 2.0,
+) -> dict:
+    deadline = monotonic() + timeout_seconds
+    last_body: dict | None = None
+
+    while monotonic() <= deadline:
+        response = await client.get("/ready")
+        if response.status_code == 503:
+            body = response.json()
+            last_body = body
+            service = body.get("services", {}).get(service_name)
+            if body.get("status") == "degraded" and service and service.get("status") == "error":
+                return body
+        else:
+            try:
+                last_body = response.json()
+            except ValueError:
+                last_body = {"body": response.text}
+        await asyncio.sleep(interval_seconds)
+
+    raise AssertionError(f"Gateway did not report {service_name} degraded. Last body: {last_body}")
+
+
+async def wait_for_url_ok(
+    url: str,
+    *,
+    timeout_seconds: float = 120.0,
+    interval_seconds: float = 2.0,
+) -> None:
+    deadline = monotonic() + timeout_seconds
+    last_error: str | None = None
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while monotonic() <= deadline:
+            try:
+                response = await client.get(url)
+                if 200 <= response.status_code < 300:
+                    return
+                last_error = f"{response.status_code}: {response.text}"
+            except httpx.HTTPError as exc:
+                last_error = repr(exc)
+            await asyncio.sleep(interval_seconds)
+
+    raise AssertionError(f"{url} did not become ready. Last error: {last_error}")
+
+
+async def wait_for_search_available(
+    client: httpx.AsyncClient,
+    *,
+    timeout_seconds: float = 120.0,
+    interval_seconds: float = 2.0,
+) -> None:
+    deadline = monotonic() + timeout_seconds
+    last_body: dict | str | None = None
+
+    while monotonic() <= deadline:
+        response = await client.get("/search", params={"q": "recovery"})
+        if response.status_code == 200:
+            return
+        try:
+            last_body = response.json()
+        except ValueError:
+            last_body = response.text
+        await asyncio.sleep(interval_seconds)
+
+    raise AssertionError(f"Search did not become available. Last body: {last_body}")
+
+
+def _compose_env() -> dict[str, str]:
+    if shutil.which("docker") is None:
+        pytest.skip("Docker CLI is required for controlled outage E2E tests.")
+    project_name = os.getenv("COMPOSE_PROJECT_NAME")
+    internal_token = os.getenv("INTERNAL_TOKEN")
+    if not project_name or not internal_token:
+        pytest.skip("COMPOSE_PROJECT_NAME and INTERNAL_TOKEN are required for controlled outage E2E tests.")
+
+    env = os.environ.copy()
+    env["COMPOSE_PROJECT_NAME"] = project_name
+    env["INTERNAL_TOKEN"] = internal_token
+    return env
+
+
+def _run_compose(*args: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["docker", "compose", *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=_compose_env(),
+            timeout=120,
+        )
+    except PermissionError as exc:
+        pytest.skip(f"Docker daemon is not accessible: {exc}")
+    except subprocess.CalledProcessError as exc:
+        raise AssertionError(
+            f"docker compose {' '.join(args)} failed with exit {exc.returncode}\n"
+            f"stdout:\n{exc.stdout}\n\nstderr:\n{exc.stderr}"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError(f"docker compose {' '.join(args)} timed out") from exc
+
+
+def compose_stop(service: str) -> None:
+    _run_compose("stop", service)
+
+
+def compose_up(service: str) -> None:
+    _run_compose("up", "-d", service)
