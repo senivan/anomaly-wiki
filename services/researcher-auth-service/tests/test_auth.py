@@ -91,6 +91,30 @@ async def test_register_ignores_privileged_role_input(app):
 
 
 @pytest.mark.asyncio
+async def test_register_rejects_short_password_and_unknown_role(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        short_password_response = await ac.post(
+            "/auth/register",
+            json={
+                "email": f"test-{uuid.uuid4()}@example.com",
+                "password": "x",
+                "role": "Researcher",
+            },
+        )
+        assert short_password_response.status_code == 422, short_password_response.text
+
+        unknown_role_response = await ac.post(
+            "/auth/register",
+            json={
+                "email": f"test-{uuid.uuid4()}@example.com",
+                "password": "testpassword123",
+                "role": "DefinitelyNotARole",
+            },
+        )
+        assert unknown_role_response.status_code == 422, unknown_role_response.text
+
+
+@pytest.mark.asyncio
 async def test_users_me_cannot_self_promote(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         email = f"test-{uuid.uuid4()}@example.com"

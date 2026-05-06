@@ -3,6 +3,7 @@ from fastapi.responses import Response
 
 from clients.http import forward_request
 from config import Settings, get_settings
+from errors import GatewayUpstreamResponseError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -12,13 +13,28 @@ async def _proxy_auth_request(
     settings: Settings,
     upstream_path: str,
 ) -> Response:
-    return await forward_request(
-        request,
-        service="researcher-auth-service",
-        upstream_base_url=settings.researcher_auth_base_url,
-        upstream_path=upstream_path,
-        settings=settings,
-    )
+    try:
+        return await forward_request(
+            request,
+            service="researcher-auth-service",
+            upstream_base_url=settings.researcher_auth_base_url,
+            upstream_path=upstream_path,
+            settings=settings,
+        )
+    except GatewayUpstreamResponseError as exc:
+        if (
+            upstream_path == "/auth/login"
+            and exc.status_code == 400
+            and isinstance(exc.body, dict)
+            and exc.body.get("detail") == "LOGIN_BAD_CREDENTIALS"
+        ):
+            raise GatewayUpstreamResponseError(
+                service=exc.service,
+                status_code=401,
+                body=exc.body,
+                headers=exc.headers,
+            ) from exc
+        raise
 
 
 @router.post("/register")
