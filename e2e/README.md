@@ -18,15 +18,17 @@ Coverage includes auth, encyclopedia page mutations, media upload and metadata
 reads, gateway negative-auth checks, readiness checks, and search-service
 reachability through the gateway.
 
-The full suite currently collects 53 tests. It includes whole-system journeys
+The full suite currently collects 77 tests. It includes whole-system journeys
 that exercise the real RabbitMQ/search-indexer/OpenSearch path through
 `api-gateway`. These scenarios cover published page search visibility, internal
 draft visibility, metadata tag propagation, archived page removal from search,
-and media-linked page flows.
+media-linked page flows, revision/revert lifecycles, status recovery, metadata
+normalization, pagination, and internal-search boundaries.
 
 The full suite also includes failure-recovery coverage for gateway validation
 errors, stale page versions, missing page/media resources, downstream service
-outages, and controlled dependency outages for OpenSearch and MinIO.
+outages, and controlled dependency outages for OpenSearch, MinIO, RabbitMQ, and
+the search indexer.
 
 Page-to-search indexing coverage is present but skipped by default because
 `search-indexer` is not part of the current `main` compose stack. Enable it with:

@@ -95,6 +95,172 @@ async def create_published_page(
     return published
 
 
+async def create_page(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+    *,
+    slug_prefix: str = "e2e-page",
+    title: str = "E2E Page",
+    content: str = "E2E page content.",
+    summary: str = "",
+    type_: str = "Anomaly",
+    visibility: str = "Public",
+) -> dict:
+    slug = f"{slug_prefix}-{uuid4().hex[:8]}"
+    response = await client.post(
+        "/pages",
+        headers=auth_headers,
+        json={
+            "slug": slug,
+            "type": type_,
+            "visibility": visibility,
+            "title": title,
+            "summary": summary,
+            "content": content,
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    body["e2e_slug"] = slug
+    return body
+
+
+async def create_draft_revision(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+    page_state: dict,
+    *,
+    title: str,
+    content: str,
+    summary: str = "",
+    parent_revision_id: str | None = None,
+) -> dict:
+    payload = {
+        "expected_page_version": page_state["page"]["version"],
+        "title": title,
+        "summary": summary,
+        "content": content,
+    }
+    if parent_revision_id is not None:
+        payload["parent_revision_id"] = parent_revision_id
+
+    response = await client.post(
+        f"/pages/{page_state['page']['id']}/drafts",
+        headers=auth_headers,
+        json=payload,
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    if "e2e_slug" in page_state:
+        body["e2e_slug"] = page_state["e2e_slug"]
+    return body
+
+
+async def publish_revision(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+    page_state: dict,
+    *,
+    revision_id: str | None = None,
+) -> dict:
+    response = await client.post(
+        f"/pages/{page_state['page']['id']}/publish",
+        headers=auth_headers,
+        json={
+            "expected_page_version": page_state["page"]["version"],
+            "revision_id": revision_id or page_state["revision"]["id"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    if "e2e_slug" in page_state:
+        body["e2e_slug"] = page_state["e2e_slug"]
+    return body
+
+
+async def update_page_metadata(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+    page_state: dict,
+    *,
+    tags: list[str] | None = None,
+    classifications: list[str] | None = None,
+    related_page_ids: list[str] | None = None,
+    media_asset_ids: list[str] | None = None,
+) -> dict:
+    response = await client.put(
+        f"/pages/{page_state['page']['id']}/metadata",
+        headers=auth_headers,
+        json={
+            "expected_page_version": page_state["page"]["version"],
+            "tags": tags or [],
+            "classifications": classifications or [],
+            "related_page_ids": related_page_ids or [],
+            "media_asset_ids": media_asset_ids or [],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    if "e2e_slug" in page_state:
+        body["e2e_slug"] = page_state["e2e_slug"]
+    return body
+
+
+async def transition_page_status(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+    page_state: dict,
+    *,
+    status: str,
+) -> dict:
+    response = await client.post(
+        f"/pages/{page_state['page']['id']}/status",
+        headers=auth_headers,
+        json={
+            "expected_page_version": page_state["page"]["version"],
+            "status": status,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    if "e2e_slug" in page_state:
+        body["e2e_slug"] = page_state["e2e_slug"]
+    return body
+
+
+async def upload_media_asset(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+    *,
+    filename: str,
+    payload: bytes,
+    content_type: str | None = "text/plain",
+) -> dict:
+    file_value = (filename, payload) if content_type is None else (filename, payload, content_type)
+    response = await client.post(
+        "/media",
+        headers=auth_headers,
+        files={"file": file_value},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def download_media_asset(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+    asset_id: str,
+) -> bytes:
+    download_response = await client.get(
+        f"/media/{asset_id}/download-url",
+        headers=auth_headers,
+    )
+    assert download_response.status_code == 200, download_response.text
+    object_response = await client.get(download_response.json()["url"])
+    assert object_response.status_code == 200, object_response.text
+    return object_response.content
+
+
 async def seed_search_document(
     document: dict,
     *,
