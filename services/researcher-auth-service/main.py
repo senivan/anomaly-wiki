@@ -50,6 +50,10 @@ app.include_router(
     tags=["users"],
 )
 
+@app.get("/health")
+async def healthcheck():
+    return {"status": "ok"}
+
 @app.get("/auth/jwks")
 async def get_jwks():
     _, public_pem = load_keys()

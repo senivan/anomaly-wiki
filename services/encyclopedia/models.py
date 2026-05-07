@@ -22,7 +22,7 @@ class PageRecord(Base):
     status: Mapped[PageStatus] = mapped_column(
         Enum(PageStatus),
         default=PageStatus.DRAFT,
-        server_default=PageStatus.DRAFT.value,
+        server_default=PageStatus.DRAFT.name,
         nullable=False,
     )
     visibility: Mapped[Visibility] = mapped_column(Enum(Visibility), nullable=False)

@@ -4,6 +4,15 @@ from httpx import AsyncClient, ASGITransport
 from auth.keys import load_keys
 
 @pytest.mark.asyncio
+async def test_healthcheck(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.asyncio
 async def test_jwks(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.get("/auth/jwks")
@@ -79,6 +88,30 @@ async def test_register_ignores_privileged_role_input(app):
         register_response = await ac.post("/auth/register", json=register_payload)
         assert register_response.status_code == 201, register_response.text
         assert register_response.json()["role"] == "Researcher"
+
+
+@pytest.mark.asyncio
+async def test_register_rejects_short_password_and_unknown_role(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        short_password_response = await ac.post(
+            "/auth/register",
+            json={
+                "email": f"test-{uuid.uuid4()}@example.com",
+                "password": "x",
+                "role": "Researcher",
+            },
+        )
+        assert short_password_response.status_code == 422, short_password_response.text
+
+        unknown_role_response = await ac.post(
+            "/auth/register",
+            json={
+                "email": f"test-{uuid.uuid4()}@example.com",
+                "password": "testpassword123",
+                "role": "DefinitelyNotARole",
+            },
+        )
+        assert unknown_role_response.status_code == 422, unknown_role_response.text
 
 
 @pytest.mark.asyncio

@@ -11,7 +11,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole), 
         default=UserRole.RESEARCHER, 
-        server_default=UserRole.RESEARCHER.value,
+        server_default=UserRole.RESEARCHER.name,
         nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(

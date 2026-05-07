@@ -102,6 +102,7 @@ async def test_upload_creates_metadata_and_object(monkeypatch) -> None:
     asset_id = UUID(body["id"])
     assert body["filename"] == "photo.jpg"
     assert body["mime_type"] == "image/jpeg"
+    assert body["content_type"] == "image/jpeg"
     assert body["size_bytes"] == len(b"zone photo")
     assert body["uploaded_by"] == str(uploaded_by)
     assert body["checksum_sha256"] == "f11ee40d5aca71c20a8c6d9d1ef30188617e243e798bc8af836980b360d64388"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from typing import Protocol
+from urllib.parse import urlparse
 
 import anyio
 
@@ -51,6 +52,25 @@ class MinioObjectStorage:
                 secure=self._settings.object_storage_secure,
             )
         return self._client
+
+    def _presign_client(self):
+        public_base_url = self._settings.public_storage_base_url
+        if not public_base_url:
+            return self.client
+
+        parsed = urlparse(public_base_url)
+        if not parsed.netloc:
+            return self.client
+
+        from minio import Minio
+
+        return Minio(
+            parsed.netloc,
+            access_key=self._settings.object_storage_access_key,
+            secret_key=self._settings.object_storage_secret_key,
+            secure=parsed.scheme == "https",
+            region="us-east-1",
+        )
 
     def _ensure_bucket(self) -> None:
         # Guard against a race where two callers both observe the bucket missing
@@ -104,7 +124,7 @@ class MinioObjectStorage:
     ) -> str:
         def _url() -> str:
             self._ensure_bucket()
-            return self.client.presigned_get_object(
+            return self._presign_client().presigned_get_object(
                 self._bucket,
                 storage_path,
                 expires=timedelta(seconds=expires_in_seconds),
