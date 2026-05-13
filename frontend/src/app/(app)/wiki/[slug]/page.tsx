@@ -1,0 +1,383 @@
+"use client";
+import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { pagesApi } from "@/lib/api/pages";
+import { useAuthStore, hasRole } from "@/lib/store/auth";
+import { Icon } from "@/components/ui/Icon";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { PageTypeChip } from "@/components/ui/PageTypeChip";
+import { Stamp } from "@/components/ui/Stamp";
+import { ImgHolder } from "@/components/ui/ImgHolder";
+import Link from "next/link";
+import type { Revision } from "@/lib/api/types";
+
+type Tab = "article" | "revisions" | "media" | "discussion" | "raw";
+
+export default function WikiPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const router = useRouter();
+  const { user, token } = useAuthStore();
+  const [tab, setTab] = useState<Tab>("article");
+  const qc = useQueryClient();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["page", slug],
+    queryFn: () => pagesApi.getBySlug(slug, token ?? undefined),
+  });
+
+  const { data: revisionsData } = useQuery({
+    queryKey: ["revisions", data?.page.id],
+    queryFn: () => pagesApi.listRevisions(data!.page.id, token ?? undefined),
+    enabled: !!data && tab === "revisions",
+  });
+
+  const submitMutation = useMutation({
+    mutationFn: () => pagesApi.transitionStatus(
+      data!.page.id,
+      { new_status: "Review", expected_page_version: data!.page.version },
+      token!,
+    ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["page", slug] }),
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: () => pagesApi.publish(
+      data!.page.id,
+      { revision_id: data!.page.current_draft_revision_id!, expected_page_version: data!.page.version },
+      token!,
+    ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["page", slug] }),
+  });
+
+  if (isLoading) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <div className="kicker">Loading…</div>
+            <div style={{ height: 48, background: "var(--paper-2)", margin: "12px 0", width: "60%" }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="callout callout--danger" style={{ maxWidth: "none" }}>
+        <div className="callout__title"><Icon name="alert" size={11} /> Error</div>
+        <div>Page not found or access denied. <Link href="/">Return home</Link></div>
+      </div>
+    );
+  }
+
+  const { page, current_published_revision, current_draft_revision } = data;
+  const revision = current_published_revision ?? current_draft_revision;
+  const revisions = (revisionsData?.revisions ?? []) as Revision[];
+
+  const TABS: { id: Tab; label: string }[] = [
+    { id: "article",   label: "Article" },
+    { id: "revisions", label: "Revisions" },
+    { id: "media",     label: "Media" },
+    { id: "discussion",label: "Discussion" },
+    { id: "raw",       label: "Raw markdown" },
+  ];
+
+  return (
+    <div>
+      <header className="page-header">
+        <div>
+          <div className="page-header__crumbs">
+            <Link href="/" style={{ textDecoration: "none", color: "var(--ink-3)" }}>Wiki</Link>
+            <span>/</span>
+            <Link href={`/search?type=${page.type}`} style={{ textDecoration: "none", color: "var(--ink-3)" }}>{page.type}s</Link>
+            <span>/</span>
+            <span className="mono">{page.slug}</span>
+          </div>
+          <div className="row" style={{ gap: 10, marginBottom: 6 }}>
+            <PageTypeChip type={page.type} />
+            <StatusPill status={page.status} visibility={page.visibility} />
+          </div>
+          <h1>{revision?.title ?? page.slug}</h1>
+          <div className="page-header__code">{page.slug}</div>
+          <p className="page-header__sum">{revision?.summary}</p>
+          <div className="page-header__chips">
+            {page.tags.map((t) => (
+              <span key={t} className="tag mono">#{t}</span>
+            ))}
+          </div>
+        </div>
+
+        <aside className="dossier">
+          <div className="dossier__lab">
+            <span>Dossier</span>
+            <span>{page.slug}</span>
+          </div>
+          <dl>
+            <dt>Type</dt>      <dd>{page.type}</dd>
+            <dt>Status</dt>    <dd>{page.status}</dd>
+            <dt>Visibility</dt><dd>{page.visibility}</dd>
+            <dt>Tags</dt>      <dd>{page.tags.join(", ") || "—"}</dd>
+            <dt>Created</dt>   <dd>{page.created_at.slice(0, 10)}</dd>
+            <dt>Updated</dt>   <dd>{page.updated_at.slice(0, 10)}</dd>
+          </dl>
+          <div className="row" style={{ marginTop: 14, gap: 6, flexWrap: "wrap" }}>
+            {user && hasRole(user.role, "Researcher") && (
+              <Link href={`/edit/${page.slug}`} className="btn btn--sm">
+                <Icon name="edit" size={11} /> Edit
+              </Link>
+            )}
+            {user && hasRole(user.role, "Researcher") && page.status === "Draft" && (
+              <button
+                className="btn btn--ghost btn--sm"
+                onClick={() => submitMutation.mutate()}
+                disabled={submitMutation.isPending}
+              >
+                <Icon name="check" size={11} /> Submit
+              </button>
+            )}
+            {user && hasRole(user.role, "Editor") && page.status === "Review" && (
+              <button
+                className="btn btn--primary btn--sm"
+                onClick={() => publishMutation.mutate()}
+                disabled={publishMutation.isPending}
+              >
+                <Icon name="check" size={11} /> Publish
+              </button>
+            )}
+          </div>
+        </aside>
+      </header>
+
+      <div className="article-tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={`article-tab ${tab === t.id ? "is-active" : ""}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "article" && (
+        <ArticleTab
+          page={page}
+          revision={revision}
+          router={router}
+          userRole={user?.role}
+          slug={slug}
+        />
+      )}
+      {tab === "revisions" && <RevisionsTab revisions={revisions} />}
+      {tab === "media"     && <MediaTab pageId={page.id} token={token} />}
+      {tab === "discussion"&& <DiscussionTab />}
+      {tab === "raw"       && <RawTab page={page} revision={revision} />}
+    </div>
+  );
+}
+
+function ArticleTab({ page, revision, router, userRole, slug }: {
+  page: import("@/lib/api/types").Page;
+  revision: Revision | null | undefined;
+  router: ReturnType<typeof useRouter>;
+  userRole?: string;
+  slug: string;
+}) {
+  return (
+    <div className="article-grid">
+      <div className="prose">
+        {page.status === "Draft"  && (
+          <div style={{ marginBottom: 16 }}><Stamp kind="draft" text="DRAFT — NOT PUBLISHED" /></div>
+        )}
+        {page.status === "Review" && (
+          <div style={{ marginBottom: 16 }}><Stamp kind="approved" text="UNDER EDITOR REVIEW" /></div>
+        )}
+        {page.visibility === "Internal" && page.status === "Published" && (
+          <div style={{ marginBottom: 16 }}><Stamp text="INTERNAL · L2+" /></div>
+        )}
+
+        <ImgHolder label={`${page.slug} · field photograph`} ratio="16/9" />
+        <p className="muted xsmall mono" style={{ marginTop: 6 }}>
+          FIG. 01 — {page.slug} · {page.updated_at.slice(0, 10)}
+        </p>
+
+        {revision?.content ? (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              h2: ({ children }) => <h2>{children}</h2>,
+              table: ({ children }) => <table className="field-table">{children}</table>,
+              blockquote: ({ children }) => (
+                <div className="callout callout--info">
+                  <div className="callout__title"><Icon name="shield" size={11} />Note</div>
+                  <div>{children}</div>
+                </div>
+              ),
+            }}
+          >
+            {revision.content}
+          </ReactMarkdown>
+        ) : (
+          <p className="muted">No content available.</p>
+        )}
+
+        <hr style={{ border: 0, borderTop: "1px solid var(--rule)", margin: "32px 0 16px" }} />
+        <div className="spread">
+          <span className="mono xsmall muted">Last revision · {page.updated_at.slice(0, 10)}</span>
+          {userRole && userRole !== "Public" && (
+            <Link href={`/edit/${slug}`} className="btn btn--sm">
+              <Icon name="edit" size={11} /> Edit page
+            </Link>
+          )}
+        </div>
+      </div>
+
+      <aside>
+        <nav className="toc">
+          <h6>On this page</h6>
+          {revision?.content
+            .split("\n")
+            .filter((l) => l.startsWith("## "))
+            .map((l) => l.slice(3).trim())
+            .map((h) => (
+              <a key={h} href={`#${h.toLowerCase().replace(/\s+/g, "-")}`}>{h}</a>
+            ))}
+        </nav>
+        <div style={{ marginTop: 32 }}>
+          <h6 className="kicker" style={{ marginBottom: 8 }}>Classification</h6>
+          <dl style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-2)" }}>
+            {Object.entries(page.classifications ?? {}).map(([k, v]) => (
+              <>
+                <dt key={`k-${k}`} style={{ color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 10.5 }}>{k}</dt>
+                <dd key={`v-${k}`} style={{ margin: 0 }}>{v}</dd>
+              </>
+            ))}
+          </dl>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function RevisionsTab({ revisions }: { revisions: Revision[] }) {
+  if (revisions.length === 0) {
+    return <div className="muted" style={{ padding: "20px 0" }}>No revision history available.</div>;
+  }
+  const latest  = revisions[0];
+  const prev    = revisions[1];
+  const diffLines = generateDiff(prev?.content ?? "", latest?.content ?? "");
+
+  return (
+    <div className="article-grid" style={{ gridTemplateColumns: "1fr 320px" }}>
+      <div>
+        <div className="kicker" style={{ marginBottom: 10 }}>
+          Diff · r{revisions.length} ↔ r{revisions.length - 1}
+        </div>
+        <div className="diff" style={{ marginBottom: 24 }}>
+          {diffLines.map((line, i) => (
+            <div key={i} className={`diff__row ${line.type}`}>
+              <div className="diff__num">{line.num}</div>
+              <div className="diff__line">{line.text}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <aside>
+        <h6 className="kicker" style={{ marginBottom: 8 }}>Revision history</h6>
+        <ul className="related-list">
+          {revisions.map((r, i) => (
+            <li key={r.id} style={{ display: "block" }}>
+              <div className="spread">
+                <b>r{revisions.length - i}</b>
+                <span className="mono xsmall muted">{r.created_at.slice(0, 16)}</span>
+              </div>
+              <div className="xsmall" style={{ margin: "2px 0" }}>{r.summary || "No summary"}</div>
+              <div className="mono xsmall muted">{r.author_id ?? "unknown"}</div>
+            </li>
+          ))}
+        </ul>
+      </aside>
+    </div>
+  );
+}
+
+function generateDiff(oldText: string, newText: string) {
+  const oldLines = oldText.split("\n").slice(0, 10);
+  const newLines = newText.split("\n").slice(0, 10);
+  const lines: { type: "ctx" | "add" | "del"; num: number; text: string }[] = [];
+  const maxLen = Math.max(oldLines.length, newLines.length);
+  for (let i = 0; i < Math.min(maxLen, 12); i++) {
+    const o = oldLines[i];
+    const n = newLines[i];
+    if (o === n) lines.push({ type: "ctx", num: i + 1, text: o ?? "" });
+    else {
+      if (o !== undefined) lines.push({ type: "del", num: i + 1, text: o });
+      if (n !== undefined) lines.push({ type: "add", num: i + 1, text: n });
+    }
+  }
+  return lines;
+}
+
+function MediaTab({ pageId, token }: { pageId: string; token: string | null }) {
+  return (
+    <div className="muted" style={{ padding: "20px 0" }}>
+      Media assets linked to this record will appear here.
+      {!token && <span> Sign in to view attached media.</span>}
+    </div>
+  );
+}
+
+function DiscussionTab() {
+  return (
+    <div style={{ maxWidth: "80ch" }}>
+      <div className="muted" style={{ padding: "20px 0" }}>Discussion threads will appear here.</div>
+      <div style={{ marginTop: 18, border: "1px solid var(--ink)", padding: 14 }}>
+        <div className="kicker" style={{ marginBottom: 8 }}>Add comment</div>
+        <textarea
+          className="edit-textarea"
+          style={{ minHeight: 80 }}
+          placeholder="Comments are visible to all Researchers and Editors."
+        />
+        <div className="row" style={{ justifyContent: "flex-end", marginTop: 6 }}>
+          <button className="btn btn--primary btn--sm">Post comment</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RawTab({ page, revision }: {
+  page: import("@/lib/api/types").Page;
+  revision: Revision | null | undefined;
+}) {
+  const frontmatter = `---
+slug: ${page.slug}
+type: ${page.type}
+status: ${page.status}
+visibility: ${page.visibility}
+tags:
+${page.tags.map((t) => `  - ${t}`).join("\n")}
+---
+
+# ${revision?.title ?? page.slug}
+
+${revision?.summary ?? ""}
+
+${revision?.content ?? ""}`;
+
+  return (
+    <div>
+      <div className="kicker" style={{ marginBottom: 10 }}>
+        Canonical markdown · {page.slug}.md
+      </div>
+      <pre className="diff" style={{ padding: 18, fontSize: 12.5, whiteSpace: "pre-wrap", overflowX: "auto" }}>
+        {frontmatter}
+      </pre>
+    </div>
+  );
+}

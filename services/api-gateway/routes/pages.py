@@ -27,6 +27,21 @@ async def _forward_protected_page_request(
     )
 
 
+@router.get("/slug/{slug}")
+async def proxy_get_page_state_by_slug(
+    slug: str,
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    return await _forward_protected_page_request(
+        request,
+        auth=auth,
+        upstream_path=f"/pages/slug/{slug}",
+        settings=settings,
+    )
+
+
 @router.get("/{page_id}")
 async def proxy_get_page_state(
     page_id: UUID,

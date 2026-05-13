@@ -143,6 +143,22 @@ class PageService:
 
         return page, current_draft_revision, current_published_revision
 
+    async def get_page_state_by_slug(self, slug: str) -> tuple[PageRecord, RevisionRecord | None, RevisionRecord | None]:
+        repository = PageRepository(self.session)
+        page = await repository.get_page_by_slug(slug)
+        if page is None:
+            raise PageNotFoundError(f"Page with slug '{slug}' was not found.")
+
+        current_draft_revision = None
+        if page.current_draft_revision_id is not None:
+            current_draft_revision = await repository.get_revision(page.current_draft_revision_id)
+
+        current_published_revision = None
+        if page.current_published_revision_id is not None:
+            current_published_revision = await repository.get_revision(page.current_published_revision_id)
+
+        return page, current_draft_revision, current_published_revision
+
     async def list_page_revisions(self, page_id: UUID) -> tuple[PageRecord, list[RevisionRecord]]:
         repository = PageRepository(self.session)
         page = await repository.get_page(page_id)

@@ -66,6 +66,24 @@ async def create_draft_revision(
     return PageDraftResponse(page=page, revision=revision)
 
 
+@router.get("/slug/{slug}", response_model=PageStateResponse)
+async def get_page_state_by_slug(
+    slug: str,
+    session: AsyncSession = Depends(get_async_session),
+) -> PageStateResponse:
+    service = PageService(session)
+    try:
+        page, current_draft_revision, current_published_revision = await service.get_page_state_by_slug(slug)
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return PageStateResponse(
+        page=page,
+        current_draft_revision=current_draft_revision,
+        current_published_revision=current_published_revision,
+    )
+
+
 @router.get("/{page_id}", response_model=PageStateResponse)
 async def get_page_state(
     page_id: UUID,

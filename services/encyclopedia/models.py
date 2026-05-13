@@ -18,14 +18,18 @@ class PageRecord(Base):
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     slug: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    type: Mapped[PageType] = mapped_column(Enum(PageType), nullable=False)
+    type: Mapped[PageType] = mapped_column(
+        Enum(*[r.value for r in PageType], name="pagetype"), nullable=False
+    )
     status: Mapped[PageStatus] = mapped_column(
-        Enum(PageStatus),
+        Enum(*[r.value for r in PageStatus], name="pagestatus"),
         default=PageStatus.DRAFT,
         server_default=PageStatus.DRAFT.value,
         nullable=False,
     )
-    visibility: Mapped[Visibility] = mapped_column(Enum(Visibility), nullable=False)
+    visibility: Mapped[Visibility] = mapped_column(
+        Enum(*[r.value for r in Visibility], name="visibility"), nullable=False
+    )
     current_draft_revision_id: Mapped[UUID | None] = mapped_column(
         Uuid,
         ForeignKey("revisions.id"),
