@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { pagesApi } from "@/lib/api/pages";
+import { mediaApi } from "@/lib/api/media";
 import { useAuthStore, hasRole } from "@/lib/store/auth";
 import { Icon } from "@/components/ui/Icon";
 import { StatusPill } from "@/components/ui/StatusPill";
@@ -18,7 +19,6 @@ type Tab = "article" | "revisions" | "media" | "discussion" | "raw";
 
 export default function WikiPage() {
   const { slug } = useParams<{ slug: string }>();
-  const router = useRouter();
   const { user, token } = useAuthStore();
   const [tab, setTab] = useState<Tab>("article");
   const qc = useQueryClient();
@@ -37,7 +37,7 @@ export default function WikiPage() {
   const submitMutation = useMutation({
     mutationFn: () => pagesApi.transitionStatus(
       data!.page.id,
-      { new_status: "Review", expected_page_version: data!.page.version },
+      { status: "Review", expected_page_version: data!.page.version },
       token!,
     ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["page", slug] }),
@@ -168,7 +168,6 @@ export default function WikiPage() {
         <ArticleTab
           page={page}
           revision={revision}
-          router={router}
           userRole={user?.role}
           slug={slug}
         />
@@ -181,10 +180,9 @@ export default function WikiPage() {
   );
 }
 
-function ArticleTab({ page, revision, router, userRole, slug }: {
+function ArticleTab({ page, revision, userRole, slug }: {
   page: import("@/lib/api/types").Page;
   revision: Revision | null | undefined;
-  router: ReturnType<typeof useRouter>;
   userRole?: string;
   slug: string;
 }) {
@@ -324,10 +322,36 @@ function generateDiff(oldText: string, newText: string) {
 }
 
 function MediaTab({ pageId, token }: { pageId: string; token: string | null }) {
+  const { data } = useQuery({
+    queryKey: ["page-media", pageId],
+    queryFn: () => pagesApi.getById(pageId, token ?? undefined)
+      .then((state) => Promise.all(
+        state.page.media_asset_ids.map((assetId) => mediaApi.getAsset(assetId, token!)),
+      )),
+    enabled: !!token,
+  });
+
+  const assets = data ?? [];
+
   return (
     <div className="muted" style={{ padding: "20px 0" }}>
-      Media assets linked to this record will appear here.
-      {!token && <span> Sign in to view attached media.</span>}
+      {!token && <span>Sign in to view attached media.</span>}
+      {token && assets.length === 0 && <span>No media assets are linked to this record.</span>}
+      {assets.length > 0 && (
+        <div className="media-grid">
+          {assets.map((asset) => (
+            <article key={asset.id} className="media-card">
+              <div className="media-card__body">
+                <div className="media-card__name">{asset.filename}</div>
+                <div className="media-card__meta">
+                  <span>{asset.mime_type}</span>
+                  <span>{asset.size_bytes} bytes</span>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

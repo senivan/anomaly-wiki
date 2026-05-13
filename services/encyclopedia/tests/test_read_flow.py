@@ -65,6 +65,21 @@ async def test_get_page_state_returns_current_draft_and_page_metadata(tmp_path, 
     assert body["current_published_revision"] is None
 
 
+async def test_get_page_state_by_slug_returns_current_draft(tmp_path, monkeypatch) -> None:
+    app = await create_test_app(tmp_path, monkeypatch)
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        _, edit_body = await seed_page_with_two_revisions(client)
+        response = await client.get("/pages/slug/controller-anomaly")
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["page"]["slug"] == "controller-anomaly"
+    assert body["current_draft_revision"]["id"] == edit_body["revision"]["id"]
+
+
 async def test_list_page_revisions_returns_full_history(tmp_path, monkeypatch) -> None:
     app = await create_test_app(tmp_path, monkeypatch)
     async with AsyncClient(

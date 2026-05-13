@@ -1,0 +1,110 @@
+name: Frontend E2E Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "31 4 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/frontend-e2e.yml"
+      - "docker-compose.yml"
+      - "frontend/**"
+      - "init-db.sql"
+      - "services/**"
+      - "shared/**"
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      COMPOSE_PROJECT_NAME: anomaly-wiki-frontend-e2e
+      INTERNAL_TOKEN: e2e-internal-token
+      NEXT_PUBLIC_GATEWAY_URL: http://127.0.0.1:8000
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare auth keys
+        run: |
+          mkdir -p services/researcher-auth-service/secrets
+          openssl genrsa -out services/researcher-auth-service/secrets/rsa_private.pem 2048
+
+      - name: Validate compose config
+        run: docker compose config --quiet
+
+      - name: Build and start backend stack
+        run: docker compose up -d --build
+
+      - name: Wait for gateway readiness
+        run: |
+          for attempt in {1..120}; do
+            status="$(curl -sS -o /tmp/gateway-ready.json -w '%{http_code}' http://localhost:8000/ready || true)"
+            if [ "$status" = "200" ]; then
+              cat /tmp/gateway-ready.json
+              exit 0
+            fi
+            echo "Gateway not ready yet (attempt ${attempt}/120, status=${status})"
+            cat /tmp/gateway-ready.json 2>/dev/null || true
+            sleep 5
+          done
+          docker compose ps
+          docker compose logs --no-color
+          exit 1
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Run frontend E2E tests
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          mkdir -p e2e-artifacts
+          docker compose ps > e2e-artifacts/compose-ps.txt
+          docker compose logs --no-color > e2e-artifacts/compose.log
+          curl -sS http://localhost:8000/ready > e2e-artifacts/gateway-ready.json || true
+          curl -sS http://localhost:9200/_cluster/health > e2e-artifacts/opensearch-health.json || true
+          curl -sS http://localhost:9000/minio/health/live > e2e-artifacts/minio-health.txt || true
+
+      - name: Upload frontend E2E diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-e2e-diagnostics
+          path: |
+            e2e-artifacts
+            frontend/playwright-report
+            frontend/test-results
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v --remove-orphans

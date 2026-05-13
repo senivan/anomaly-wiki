@@ -114,7 +114,7 @@ export default function AdminPage() {
 
         <div className="callout callout--warn" style={{ marginTop: 20 }}>
           <div className="callout__title">Note</div>
-          Role changes take effect on the user's next login — their current session token keeps the old role until they sign out and back in.
+          Role changes take effect on the user&apos;s next login — their current session token keeps the old role until they sign out and back in.
         </div>
       </div>
     </AuthGuard>

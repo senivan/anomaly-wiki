@@ -51,6 +51,7 @@ export interface MediaAsset {
   id: string;
   filename: string;
   mime_type: string;
+  content_type?: string;
   uploaded_by: string;
   size_bytes: number;
   created_at: string;
@@ -62,13 +63,16 @@ export interface SearchResult {
   slug: string;
   title: string;
   type: PageType;
+  status: PageStatus;
+  visibility: Visibility;
+  summary: string;
   snippet: string;
-  tags: string[];
+  tags?: string[];
 }
 
 export interface SearchResponse {
-  results: SearchResult[];
   total: number;
+  hits: SearchResult[];
 }
 
 export interface AuthToken {
@@ -111,7 +115,7 @@ export interface RevertRequest {
 }
 
 export interface StatusTransitionRequest {
-  new_status: PageStatus;
+  status: PageStatus;
   expected_page_version: number;
 }
 

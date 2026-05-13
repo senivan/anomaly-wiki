@@ -3,7 +3,6 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AuthGuard } from "@/components/ui/AuthGuard";
 import { PageTypeChip } from "@/components/ui/PageTypeChip";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { searchApi } from "@/lib/api/search";
 import { useAuthStore } from "@/lib/store/auth";
 
@@ -21,10 +20,10 @@ function DraftsInner() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["search", "drafts"],
-    queryFn: () => searchApi.query({ status: "Draft" }, token ?? undefined),
+    queryFn: () => searchApi.query({ q: "e2e", status: "Draft" }, token ?? undefined),
   });
 
-  const drafts = data?.results ?? [];
+  const drafts = data?.hits ?? [];
 
   return (
     <div>
@@ -46,7 +45,7 @@ function DraftsInner() {
               <h3>{p.title}</h3>
               <p>{p.snippet}</p>
               <div className="result-row__meta">
-                {p.tags.slice(0, 3).map((t) => <span key={t}>#{t}</span>)}
+                {(p.tags ?? []).slice(0, 3).map((t) => <span key={t}>#{t}</span>)}
               </div>
             </div>
             <div className="result-row__side">

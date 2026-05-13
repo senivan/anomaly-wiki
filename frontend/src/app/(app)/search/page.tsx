@@ -1,6 +1,6 @@
 "use client";
 import { Suspense } from "react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { searchApi } from "@/lib/api/search";
@@ -24,13 +24,6 @@ function SearchInner() {
   const [status, setStatus] = useState<PageStatus | "">(params.get("status") as PageStatus ?? "");
   const [sort, setSort]     = useState(params.get("sort") ?? "relevance");
 
-  useEffect(() => {
-    setQ(params.get("q") ?? "");
-    setType((params.get("type") as PageType) ?? "");
-    setStatus((params.get("status") as PageStatus) ?? "");
-    setSort(params.get("sort") ?? "relevance");
-  }, [params]);
-
   const queryParams = useMemo(
     () => ({ q: q || undefined, type: type || undefined, status: status || undefined, sort }),
     [q, type, status, sort],
@@ -41,7 +34,7 @@ function SearchInner() {
     queryFn: () => searchApi.query(queryParams, token ?? undefined),
   });
 
-  const results = data?.results ?? [];
+  const results = data?.hits ?? [];
   const total   = data?.total   ?? 0;
 
   function updateUrl(updates: Record<string, string>) {
@@ -116,7 +109,7 @@ function SearchInner() {
               <h3>{p.title}</h3>
               <p>{p.snippet}</p>
               <div className="result-row__meta">
-                {p.tags.slice(0, 4).map((t) => <span key={t}>#{t}</span>)}
+                {(p.tags ?? []).slice(0, 4).map((t) => <span key={t}>#{t}</span>)}
               </div>
             </div>
             <div className="result-row__side">

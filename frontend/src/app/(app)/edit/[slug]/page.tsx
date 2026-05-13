@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
@@ -59,6 +59,7 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
   useEffect(() => {
     if (data) {
       const rev = data.current_draft_revision ?? data.current_published_revision;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(rev?.title ?? "");
       setSummary(rev?.summary ?? "");
       setMd(rev?.content ?? "");
@@ -110,7 +111,7 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
   const submitMutation = useMutation({
     mutationFn: () => pagesApi.transitionStatus(
       page!.id,
-      { new_status: "Review", expected_page_version: page!.version },
+      { status: "Review", expected_page_version: page!.version },
       token!,
     ),
     onSuccess: () => {

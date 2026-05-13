@@ -88,14 +88,14 @@ async def create_draft_revision(
     return PageDraftResponse(page=page, revision=revision)
 
 
-@router.get("/slug/{slug}", response_model=PageStateResponse)
-async def get_page_state_by_slug(
-    slug: str,
+@router.get("/{page_id}", response_model=PageStateResponse)
+async def get_page_state(
+    page_id: UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> PageStateResponse:
     service = PageService(session)
     try:
-        page, current_draft_revision, current_published_revision = await service.get_page_state_by_slug(slug)
+        page, current_draft_revision, current_published_revision = await service.get_page_state(page_id)
     except PageNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -106,14 +106,14 @@ async def get_page_state_by_slug(
     )
 
 
-@router.get("/{page_id}", response_model=PageStateResponse)
-async def get_page_state(
-    page_id: UUID,
+@router.get("/slug/{slug}", response_model=PageStateResponse)
+async def get_page_state_by_slug(
+    slug: str,
     session: AsyncSession = Depends(get_async_session),
 ) -> PageStateResponse:
     service = PageService(session)
     try:
-        page, current_draft_revision, current_published_revision = await service.get_page_state(page_id)
+        page, current_draft_revision, current_published_revision = await service.get_page_state_by_slug(slug)
     except PageNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

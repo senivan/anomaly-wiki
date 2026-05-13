@@ -2,7 +2,7 @@ import base64
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi_users import FastAPIUsers
 from cryptography.hazmat.primitives import serialization
 from pydantic import BaseModel
@@ -55,17 +55,16 @@ app.include_router(
 )
 
 @app.get("/health")
-async def health() -> dict[str, str]:
+async def healthcheck():
     return {"status": "ok"}
 
-
-# ── Admin endpoints (called only via api-gateway Admin-only proxy) ──────────
 
 class UserListItem(BaseModel):
     id: uuid.UUID
     email: str
     role: UserRole
     is_active: bool
+
 
 class RoleUpdateRequest(BaseModel):
     role: UserRole
@@ -75,8 +74,8 @@ class RoleUpdateRequest(BaseModel):
 async def list_users(session: AsyncSession = Depends(get_async_session)):
     result = await session.execute(select(User).order_by(User.email))
     return [
-        UserListItem(id=u.id, email=u.email, role=u.role, is_active=u.is_active)
-        for u in result.scalars().all()
+        UserListItem(id=user.id, email=user.email, role=user.role, is_active=user.is_active)
+        for user in result.scalars().all()
     ]
 
 

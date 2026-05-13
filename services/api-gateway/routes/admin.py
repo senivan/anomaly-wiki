@@ -10,7 +10,7 @@ from security import AuthContext, require_role
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-async def _forward(
+async def _forward_admin_request(
     request: Request,
     *,
     auth: AuthContext,
@@ -33,7 +33,12 @@ async def proxy_list_users(
     auth: AuthContext = Depends(require_role("Admin")),
     settings: Settings = Depends(get_settings),
 ) -> Response:
-    return await _forward(request, auth=auth, upstream_path="/admin/users", settings=settings)
+    return await _forward_admin_request(
+        request,
+        auth=auth,
+        upstream_path="/admin/users",
+        settings=settings,
+    )
 
 
 @router.patch("/users/{user_id}/role")
@@ -43,6 +48,9 @@ async def proxy_update_user_role(
     auth: AuthContext = Depends(require_role("Admin")),
     settings: Settings = Depends(get_settings),
 ) -> Response:
-    return await _forward(
-        request, auth=auth, upstream_path=f"/admin/users/{user_id}/role", settings=settings
+    return await _forward_admin_request(
+        request,
+        auth=auth,
+        upstream_path=f"/admin/users/{user_id}/role",
+        settings=settings,
     )

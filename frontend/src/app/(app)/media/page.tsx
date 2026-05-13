@@ -1,90 +1,105 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuthStore } from "@/lib/store/auth";
+import { mediaApi } from "@/lib/api/media";
 import { Icon } from "@/components/ui/Icon";
-import { ImgHolder } from "@/components/ui/ImgHolder";
+import type { MediaAsset } from "@/lib/api/types";
 
-type MediaFilter = "all" | "image" | "audio" | "pdf";
-
-const MOCK_MEDIA = [
-  { id: "m-001", filename: "AN-047_funnel_perimeter_01.jpg", type: "image", size: "3.4 MB", uploadedBy: "v.komarov",  at: "2026-04-22", page: "gravity-funnel",   caption: "Northern Marshes, eastern column" },
-  { id: "m-002", filename: "AN-047_bolt_trace_seq.gif",      type: "image", size: "1.1 MB", uploadedBy: "v.komarov",  at: "2026-04-22", page: "gravity-funnel",   caption: "Marker-bolt deflection test" },
-  { id: "m-003", filename: "AR-018_stone_blood_specimen.jpg",type: "image", size: "2.8 MB", uploadedBy: "i.shevhcuk", at: "2024-07-02", page: "stone-blood",      caption: "Specimen 03, dorsal view" },
-  { id: "m-004", filename: "AN-061_field_audio_2026-03-14.wav", type: "audio", size: "12 MB", uploadedBy: "a.petrenko", at: "2026-03-14", page: "spectral-haze", caption: "Field recording, 06:21" },
-  { id: "m-005", filename: "INC-2026-014_recovery_report.pdf",  type: "pdf",   size: "0.7 MB", uploadedBy: "d.bykov",   at: "2026-04-23", page: "incident-2026", caption: "Field recovery report" },
-  { id: "m-006", filename: "LOC-04_red_forest_panorama.jpg",    type: "image", size: "5.2 MB", uploadedBy: "i.shevhcuk", at: "2025-10-11", page: "red-forest",   caption: "Eastern edge, dawn" },
-];
+function formatBytes(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
 
 export default function MediaPage() {
-  const { user } = useAuthStore();
-  const [filter, setFilter] = useState<MediaFilter>("all");
+  const { user, token } = useAuthStore();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const items = MOCK_MEDIA.filter((m) => filter === "all" || m.type === filter);
-  const totalSize = "25.2 MB";
+  async function upload(file: File | undefined) {
+    if (!file || !token) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      const asset = await mediaApi.upload(body, token);
+      setAssets((current) => [asset, ...current]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
 
   return (
     <div>
       <div className="spread" style={{ alignItems: "flex-end", marginBottom: 14 }}>
         <div>
-          <div className="kicker">media-service · /v1/assets</div>
+          <div className="kicker">media-service · /media</div>
           <h1 className="bigtitle" style={{ marginTop: 4 }}>Media library</h1>
           <div className="muted">
-            {MOCK_MEDIA.length} assets · {totalSize} · S3 bucket{" "}
-            <span className="mono">aw-media-prod</span>
+            {assets.length} uploaded asset{assets.length === 1 ? "" : "s"} in this session.
           </div>
         </div>
         {user && user.role !== "Public" && (
           <div className="row">
-            <button className="btn btn--primary btn--sm">
-              <Icon name="upload" size={11} /> Upload
+            <input
+              ref={inputRef}
+              aria-label="Upload media file"
+              type="file"
+              style={{ display: "none" }}
+              onChange={(event) => upload(event.target.files?.[0])}
+            />
+            <button
+              className="btn btn--primary btn--sm"
+              disabled={uploading || !token}
+              onClick={() => inputRef.current?.click()}
+            >
+              <Icon name="upload" size={11} /> {uploading ? "Uploading..." : "Upload"}
             </button>
           </div>
         )}
       </div>
 
-      <div className="filterbar">
-        <span className="filterbar__lab">Type</span>
-        {([["all", "All"], ["image", "Images"], ["audio", "Audio"], ["pdf", "Documents"]] as [MediaFilter, string][]).map(([k, l]) => (
-          <span
-            key={k}
-            className={`chip ${filter === k ? "is-active" : ""}`}
-            onClick={() => setFilter(k)}
-          >
-            {l}
-          </span>
-        ))}
-      </div>
+      {error && (
+        <div className="callout callout--danger" style={{ marginBottom: 16 }}>
+          <div className="callout__title">Error</div>
+          {error}
+        </div>
+      )}
 
-      <div className="media-grid">
-        {items.map((m) => (
-          <article key={m.id} className="media-card">
-            {m.type === "image" && <ImgHolder label={m.id} ratio="4/3" />}
-            {m.type === "audio" && (
+      {assets.length === 0 ? (
+        <div className="muted" style={{ padding: "30px 0" }}>
+          No media assets have been uploaded in this session.
+        </div>
+      ) : (
+        <div className="media-grid">
+          {assets.map((asset) => (
+            <article key={asset.id} className="media-card">
               <div className="imgholder" style={{ aspectRatio: "4/3" }}>
-                <span><Icon name="audio" size={20} /> WAV · {m.size}</span>
+                <span>{asset.mime_type}</span>
               </div>
-            )}
-            {m.type === "pdf" && (
-              <div className="imgholder" style={{ aspectRatio: "4/3" }}>
-                <span><Icon name="pdf" size={20} /> PDF · {m.size}</span>
+              <div className="media-card__body">
+                <div className="media-card__name">{asset.filename}</div>
+                <div className="media-card__cap">{asset.id}</div>
+                <div className="media-card__meta">
+                  <span>{asset.uploaded_by}</span>
+                  <span>{formatBytes(asset.size_bytes)} · {asset.created_at.slice(0, 10)}</span>
+                </div>
+                <div className="row" style={{ gap: 6, marginTop: 10 }}>
+                  <span className="tag mono">{asset.content_type ?? asset.mime_type}</span>
+                  <span style={{ flex: 1 }} />
+                  <span className="mono xsmall muted">{asset.id.slice(0, 8)}</span>
+                </div>
               </div>
-            )}
-            <div className="media-card__body">
-              <div className="media-card__name">{m.filename}</div>
-              <div className="media-card__cap">{m.caption}</div>
-              <div className="media-card__meta">
-                <span>{m.uploadedBy}</span>
-                <span>{m.size} · {m.at}</span>
-              </div>
-              <div className="row" style={{ gap: 6, marginTop: 10 }}>
-                <span className="tag mono">{m.page}</span>
-                <span style={{ flex: 1 }} />
-                <span className="mono xsmall muted">sha256 b3f…{m.id.slice(-3)}</span>
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

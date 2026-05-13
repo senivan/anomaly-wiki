@@ -28,6 +28,17 @@ def build_upstream_pages_app() -> FastAPI:
     async def get_revision(page_id: str, revision_id: str) -> JSONResponse:
         return JSONResponse({"page_id": page_id, "revision_id": revision_id})
 
+    @app.get("/pages/slug/{slug}")
+    async def get_page_by_slug(slug: str, request: Request) -> JSONResponse:
+        return JSONResponse(
+            {
+                "slug": slug,
+                "source": request.headers.get("x-authenticated-source"),
+                "role": request.headers.get("x-authenticated-user-role"),
+                "authorization": request.headers.get("authorization"),
+            }
+        )
+
     @app.post("/pages")
     async def create_page(request: Request) -> JSONResponse:
         return JSONResponse(
@@ -114,6 +125,29 @@ async def test_page_read_with_auth_injects_gateway_identity_headers() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "page_id": page_id,
+        "source": "api-gateway",
+        "role": "Researcher",
+        "authorization": None,
+    }
+
+
+async def test_page_read_by_slug_forwards_with_gateway_identity_headers() -> None:
+    private_key, jwk = build_auth_keypair()
+    token = issue_token(private_key, role="Researcher")
+    upstream = build_upstream_pages_app()
+    app = create_app(upstream_transport=ASGITransport(app=upstream))
+    app.state.jwks_cache._keys = [jwk]
+    app.state.jwks_cache._expires_at = 10**12
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/pages/slug/controller-anomaly",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "slug": "controller-anomaly",
         "source": "api-gateway",
         "role": "Researcher",
         "authorization": None,

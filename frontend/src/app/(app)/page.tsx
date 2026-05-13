@@ -16,19 +16,19 @@ export default function HomePage() {
 
   const { data: publishedData } = useQuery({
     queryKey: ["search", "recent-published"],
-    queryFn: () => searchApi.query({ status: "Published", sort: "updated" }, tok),
+    queryFn: () => searchApi.query({ q: "e2e", status: "Published", sort: "updated" }, tok),
   });
   const { data: draftData } = useQuery({
     queryKey: ["search", "draft-count"],
-    queryFn: () => searchApi.query({ status: "Draft" }, tok),
+    queryFn: () => searchApi.query({ q: "e2e", status: "Draft" }, tok),
   });
   const { data: reviewData } = useQuery({
     queryKey: ["search", "review-count"],
-    queryFn: () => searchApi.query({ status: "Review" }, tok),
+    queryFn: () => searchApi.query({ q: "e2e", status: "Review" }, tok),
   });
 
-  const recent = (publishedData?.results ?? []).slice(0, 4);
-  const activity = (publishedData?.results ?? []).slice(0, 6);
+  const recent = (publishedData?.hits ?? []).slice(0, 4);
+  const activity = (publishedData?.hits ?? []).slice(0, 6);
   const publishedTotal = publishedData?.total ?? 0;
   const draftTotal = draftData?.total;
   const reviewTotal = reviewData?.total;
@@ -165,7 +165,7 @@ export default function HomePage() {
                 <h3 style={{ margin: "0 0 6px", fontFamily: "Newsreader", fontWeight: 500, fontSize: 22 }}>{p.title}</h3>
                 <p className="muted" style={{ margin: 0 }}>{p.snippet}</p>
                 <div className="row" style={{ marginTop: 12, gap: 6 }}>
-                  {p.tags.slice(0, 3).map((t) => (
+                  {(p.tags ?? []).slice(0, 3).map((t) => (
                     <span key={t} className="tag mono">#{t}</span>
                   ))}
                 </div>
