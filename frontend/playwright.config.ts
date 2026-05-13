@@ -10,9 +10,19 @@ export default defineConfig({
   },
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
+  outputDir: "../e2e-artifacts/playwright-results",
   reporter: process.env.CI
-    ? [["html", { outputFolder: "playwright-report", open: "never" }], ["github"], ["list"]]
-    : [["html", { outputFolder: "playwright-report", open: "never" }], ["list"]],
+    ? [
+        ["html", { outputFolder: "../e2e-artifacts/playwright-report", open: "never" }],
+        ["json", { outputFile: "../e2e-artifacts/frontend-e2e-results.json" }],
+        ["github"],
+        ["list"],
+      ]
+    : [
+        ["html", { outputFolder: "../e2e-artifacts/playwright-report", open: "never" }],
+        ["json", { outputFile: "../e2e-artifacts/frontend-e2e-results.json" }],
+        ["list"],
+      ],
   use: {
     baseURL,
     trace: "retain-on-failure",

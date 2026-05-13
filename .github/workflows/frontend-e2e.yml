@@ -85,6 +85,11 @@ jobs:
         working-directory: frontend
         run: npm run test:e2e
 
+      - name: Generate frontend E2E markdown report
+        if: always()
+        working-directory: frontend
+        run: node e2e/write-report.mjs
+
       - name: Collect diagnostics
         if: always()
         run: |
@@ -96,14 +101,22 @@ jobs:
           curl -sS http://localhost:9000/minio/health/live > e2e-artifacts/minio-health.txt || true
 
       - name: Upload frontend E2E diagnostics
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: frontend-e2e-diagnostics
-          path: |
-            e2e-artifacts
-            frontend/playwright-report
-            frontend/test-results
+          path: e2e-artifacts
+
+      - name: Publish frontend E2E markdown report to job summary
+        if: always()
+        run: |
+          if [ -f e2e-artifacts/frontend-e2e-report.md ]; then
+            cat e2e-artifacts/frontend-e2e-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Frontend E2E Test Report" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Report file not found: e2e-artifacts/frontend-e2e-report.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Stop stack
         if: always()
