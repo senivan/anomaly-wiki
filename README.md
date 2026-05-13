@@ -23,6 +23,27 @@ The project consists of 5 main microservices, which are:
 
 The encyclopedia-service acts as the authoritative source of truth for all knowledge records, while the media-service independently manages binary assets. These services work together through an event-driven workflow where the search-indexer-service asynchronously captures content changes to update the search-service, enabling high-performance discovery without impacting the responsiveness of editing operations. All client interactions are securely orchestrated through a centralized api-gateway that coordinates with the researcher-auth-service to enforce granular access controls across the platform.
 
+## Local health check
+
+After starting the stack, verify the API gateway is reachable:
+
+```bash
+curl http://localhost:8000/health
+```
+
+In Windows PowerShell, use `curl.exe` to call the real curl binary instead of
+PowerShell's `curl` alias:
+
+```powershell
+curl.exe http://localhost:8000/health
+```
+
+Alternatively, use PowerShell's native command with basic parsing:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing http://localhost:8000/health
+```
+
 Helpful diagram:
 
 ```mermaid
