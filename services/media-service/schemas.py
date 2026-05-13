@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class MediaAssetResponse(BaseModel):
@@ -16,6 +16,11 @@ class MediaAssetResponse(BaseModel):
     checksum_sha256: str
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def content_type(self) -> str:
+        return self.mime_type
 
 
 class SignedDownloadUrlResponse(BaseModel):

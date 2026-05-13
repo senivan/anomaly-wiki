@@ -41,16 +41,15 @@ async def test_search_applies_public_filter_when_no_auth_source_header():
     assert filter_terms.get("status") == "Published"
 
 
-# No X-Internal-Token is sent; internal_token defaults to "" so the token
-# check is skipped and the request is treated as internal based on headers alone.
 async def test_search_omits_visibility_filter_for_researcher():
-    app, fake_os = build_search_app(make_os_response([]))
+    app, fake_os = build_search_app(make_os_response([]), internal_token="test-token")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.get(
             "/search?q=fire",
             headers={
                 "X-Authenticated-Source": "api-gateway",
                 "X-Authenticated-User-Role": "Researcher",
+                "X-Internal-Token": "test-token",
             },
         )
 
@@ -148,16 +147,15 @@ async def test_suggest_applies_public_filter_for_anonymous():
     assert filter_terms.get("status") == "Published"
 
 
-# No X-Internal-Token is sent; internal_token defaults to "" so the token
-# check is skipped and the request is treated as internal based on headers alone.
 async def test_suggest_omits_public_filter_for_researcher():
-    app, fake_os = build_search_app(make_os_response([]))
+    app, fake_os = build_search_app(make_os_response([]), internal_token="test-token")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.get(
             "/search/suggest?q=fir",
             headers={
                 "X-Authenticated-Source": "api-gateway",
                 "X-Authenticated-User-Role": "Researcher",
+                "X-Internal-Token": "test-token",
             },
         )
 
@@ -332,15 +330,34 @@ async def test_search_returns_empty_snippet_when_no_highlights():
     assert response.json()["hits"][0]["snippet"] == ""
 
 
+async def test_internal_request_rejected_when_internal_token_is_whitespace():
+    app, fake_os = build_search_app(make_os_response([]), internal_token="   ")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.get(
+            "/search?q=fire",
+            headers={
+                "X-Authenticated-Source": "api-gateway",
+                "X-Authenticated-User-Role": "Researcher",
+                "X-Internal-Token": "   ",
+            },
+        )
+
+    filters = fake_os.search.call_args.kwargs["body"]["query"]["bool"]["filter"]
+    filter_keys = [list(f.get("term", {}).keys())[0] for f in filters if "term" in f]
+    assert "visibility" in filter_keys
+    assert "status" in filter_keys
+
+
 async def test_search_applies_visibility_filter_for_internal_request_when_provided():
     """Internal users can narrow by visibility when explicitly passed."""
-    app, fake_os = build_search_app(make_os_response([]))
+    app, fake_os = build_search_app(make_os_response([]), internal_token="test-token")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.get(
             "/search?q=fire&visibility=Private",
             headers={
                 "X-Authenticated-Source": "api-gateway",
                 "X-Authenticated-User-Role": "Researcher",
+                "X-Internal-Token": "test-token",
             },
         )
 
@@ -355,13 +372,14 @@ async def test_search_applies_visibility_filter_for_internal_request_when_provid
 
 async def test_search_applies_status_filter_for_internal_request_when_provided():
     """Internal users can narrow by status when explicitly passed."""
-    app, fake_os = build_search_app(make_os_response([]))
+    app, fake_os = build_search_app(make_os_response([]), internal_token="test-token")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.get(
             "/search?q=fire&status=Draft",
             headers={
                 "X-Authenticated-Source": "api-gateway",
                 "X-Authenticated-User-Role": "Researcher",
+                "X-Internal-Token": "test-token",
             },
         )
 
@@ -376,23 +394,16 @@ async def test_search_applies_status_filter_for_internal_request_when_provided()
 
 async def test_search_treats_as_public_when_internal_token_mismatch():
     """Headers with wrong token must be treated as a public (not internal) request."""
-    from config import Settings, get_settings
-
-    app, fake_os = build_search_app(make_os_response([]))
-    patched_settings = Settings(internal_token="secret-abc")
-    app.dependency_overrides[get_settings] = lambda: patched_settings
-    try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get(
-                "/search?q=fire",
-                headers={
-                    "X-Authenticated-Source": "api-gateway",
-                    "X-Authenticated-User-Role": "Researcher",
-                    "X-Internal-Token": "WRONG_TOKEN",
-                },
-            )
-    finally:
-        app.dependency_overrides.clear()
+    app, fake_os = build_search_app(make_os_response([]), internal_token="secret-abc")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.get(
+            "/search?q=fire",
+            headers={
+                "X-Authenticated-Source": "api-gateway",
+                "X-Authenticated-User-Role": "Researcher",
+                "X-Internal-Token": "WRONG_TOKEN",
+            },
+        )
 
     call_args = fake_os.search.call_args
     filters = call_args.kwargs["body"]["query"]["bool"]["filter"]
@@ -404,25 +415,54 @@ async def test_search_treats_as_public_when_internal_token_mismatch():
     assert filter_terms.get("status") == "Published"
 
 
+async def test_internal_request_rejected_when_internal_token_not_configured():
+    # internal_token="" (default) — no request may claim internal status
+    app, fake_os = build_search_app(make_os_response([]))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.get(
+            "/search?q=fire",
+            headers={
+                "X-Authenticated-Source": "api-gateway",
+                "X-Authenticated-User-Role": "Researcher",
+            },
+        )
+
+    filters = fake_os.search.call_args.kwargs["body"]["query"]["bool"]["filter"]
+    filter_keys = [list(f.get("term", {}).keys())[0] for f in filters if "term" in f]
+    assert "visibility" in filter_keys
+    assert "status" in filter_keys
+
+
+async def test_internal_request_rejected_when_token_mismatch():
+    app, fake_os = build_search_app(make_os_response([]), internal_token="secret")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.get(
+            "/search?q=fire",
+            headers={
+                "X-Authenticated-Source": "api-gateway",
+                "X-Authenticated-User-Role": "Researcher",
+                "X-Internal-Token": "wrong-secret",
+            },
+        )
+
+    filters = fake_os.search.call_args.kwargs["body"]["query"]["bool"]["filter"]
+    filter_keys = [list(f.get("term", {}).keys())[0] for f in filters if "term" in f]
+    assert "visibility" in filter_keys
+    assert "status" in filter_keys
+
+
 async def test_search_treats_as_internal_when_token_matches():
     """Headers with correct token must be treated as an internal request."""
-    from config import Settings, get_settings
-
-    app, fake_os = build_search_app(make_os_response([]))
-    patched_settings = Settings(internal_token="secret-abc")
-    app.dependency_overrides[get_settings] = lambda: patched_settings
-    try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get(
-                "/search?q=fire",
-                headers={
-                    "X-Authenticated-Source": "api-gateway",
-                    "X-Authenticated-User-Role": "Researcher",
-                    "X-Internal-Token": "secret-abc",
-                },
-            )
-    finally:
-        app.dependency_overrides.clear()
+    app, fake_os = build_search_app(make_os_response([]), internal_token="secret-abc")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.get(
+            "/search?q=fire",
+            headers={
+                "X-Authenticated-Source": "api-gateway",
+                "X-Authenticated-User-Role": "Researcher",
+                "X-Internal-Token": "secret-abc",
+            },
+        )
 
     call_args = fake_os.search.call_args
     filters = call_args.kwargs["body"]["query"]["bool"]["filter"]

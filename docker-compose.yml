@@ -105,8 +105,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       ENCYCLOPEDIA_SERVICE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/encyclopedia_db
+      ENCYCLOPEDIA_SERVICE_RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672/
     expose:
       - "8000"
 
@@ -126,6 +129,7 @@ services:
       MEDIA_SERVICE_OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
       MEDIA_SERVICE_OBJECT_STORAGE_BUCKET: anomaly-media
       MEDIA_SERVICE_OBJECT_STORAGE_SECURE: "false"
+      MEDIA_SERVICE_PUBLIC_STORAGE_BASE_URL: http://localhost:9000
     expose:
       - "8000"
 
@@ -139,7 +143,7 @@ services:
     environment:
       SEARCH_SERVICE_OPENSEARCH_URL: http://opensearch:9200
       SEARCH_SERVICE_OPENSEARCH_INDEX: anomaly-wiki-pages
-      SEARCH_SERVICE_INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
+      SEARCH_SERVICE_INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN must be set}
     expose:
       - "8000"
     deploy:
@@ -152,6 +156,31 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  search-indexer:
+    build:
+      context: .
+      dockerfile: services/search-indexer/Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      encyclopedia-service:
+        condition: service_started
+      search-service:
+        condition: service_healthy
+    environment:
+      SEARCH_INDEXER_RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672/
+      SEARCH_INDEXER_OPENSEARCH_URL: http://opensearch:9200
+      SEARCH_INDEXER_OPENSEARCH_INDEX: anomaly-wiki-pages
+      SEARCH_INDEXER_ENCYCLOPEDIA_URL: http://encyclopedia-service:8000
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    restart: on-failure
 
   api-gateway:
     build:
@@ -171,7 +200,7 @@ services:
       API_GATEWAY_ENCYCLOPEDIA_BASE_URL: http://encyclopedia-service:8000
       API_GATEWAY_MEDIA_SERVICE_BASE_URL: http://media-service:8000
       API_GATEWAY_SEARCH_SERVICE_BASE_URL: http://search-service:8000
-      API_GATEWAY_SEARCH_INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
+      API_GATEWAY_SEARCH_INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN must be set}
     ports:
       - "8000:8000"
 

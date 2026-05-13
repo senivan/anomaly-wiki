@@ -24,7 +24,7 @@ def _is_internal_request(request: Request, settings: Settings) -> bool:
         return False
     if role.lower() not in _INTERNAL_ROLES:
         return False
-    if settings.internal_token and token != settings.internal_token:
+    if not settings.internal_token.strip() or token != settings.internal_token:
         return False
     return True
 
