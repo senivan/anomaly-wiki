@@ -19,16 +19,26 @@ class PageRecord(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     slug: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     type: Mapped[PageType] = mapped_column(
-        Enum(*[r.value for r in PageType], name="pagetype"), nullable=False
+        Enum(PageType, values_callable=lambda types: [type_.value for type_ in types], name="pagetype"),
+        nullable=False,
     )
     status: Mapped[PageStatus] = mapped_column(
-        Enum(*[r.value for r in PageStatus], name="pagestatus"),
+        Enum(
+            PageStatus,
+            values_callable=lambda statuses: [status.value for status in statuses],
+            name="pagestatus",
+        ),
         default=PageStatus.DRAFT,
-        server_default=PageStatus.DRAFT.name,
+        server_default=PageStatus.DRAFT.value,
         nullable=False,
     )
     visibility: Mapped[Visibility] = mapped_column(
-        Enum(*[r.value for r in Visibility], name="visibility"), nullable=False
+        Enum(
+            Visibility,
+            values_callable=lambda visibilities: [visibility.value for visibility in visibilities],
+            name="visibility",
+        ),
+        nullable=False,
     )
     current_draft_revision_id: Mapped[UUID | None] = mapped_column(
         Uuid,

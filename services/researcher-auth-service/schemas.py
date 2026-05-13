@@ -20,4 +20,4 @@ class UserCreate(schemas.BaseUserCreate):
 
 
 class UserUpdate(schemas.BaseUserUpdate):
-    role: UserRole | None = None
+    pass
