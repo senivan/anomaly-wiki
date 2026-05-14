@@ -20,6 +20,7 @@ interface AuthState {
   token: string | null;
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isHydrated: boolean;
   login: (token: string) => void;
   logout: () => void;
   hydrate: () => void;
@@ -45,28 +46,33 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   user: null,
   isAuthenticated: false,
+  isHydrated: false,
 
   login: (token) => {
     const user = parseToken(token);
     if (!user) return;
     localStorage.setItem(TOKEN_KEY, token);
-    set({ token, user, isAuthenticated: true });
+    set({ token, user, isAuthenticated: true, isHydrated: true });
   },
 
   logout: () => {
     localStorage.removeItem(TOKEN_KEY);
-    set({ token: null, user: null, isAuthenticated: false });
+    set({ token: null, user: null, isAuthenticated: false, isHydrated: true });
   },
 
   hydrate: () => {
     if (typeof window === "undefined") return;
     const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) return;
+    if (!token) {
+      set({ isHydrated: true });
+      return;
+    }
     const user = parseToken(token);
     if (user) {
-      set({ token, user, isAuthenticated: true });
+      set({ token, user, isAuthenticated: true, isHydrated: true });
     } else {
       localStorage.removeItem(TOKEN_KEY);
+      set({ token: null, user: null, isAuthenticated: false, isHydrated: true });
     }
   },
 }));

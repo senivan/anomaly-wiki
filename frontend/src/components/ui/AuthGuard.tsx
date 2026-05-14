@@ -11,18 +11,20 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ minRole = "Researcher", children }: AuthGuardProps) {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, isHydrated } = useAuthStore();
   const router = useRouter();
   const path = usePathname();
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!isAuthenticated) {
       router.replace(`/login?redirect=${encodeURIComponent(path)}`);
     } else if (user && !hasRole(user.role, minRole)) {
       router.replace("/");
     }
-  }, [isAuthenticated, user, minRole, router, path]);
+  }, [isAuthenticated, isHydrated, user, minRole, router, path]);
 
+  if (!isHydrated) return null;
   if (!isAuthenticated || !user) return null;
   if (!hasRole(user.role, minRole)) return null;
   return <>{children}</>;

@@ -35,7 +35,7 @@ export async function authenticate(page: Page, token: string) {
 }
 
 export function promoteUser(email: string, role: "Editor" | "Admin") {
-  const dbRole = role.toUpperCase();
+  const dbRole = role;
   execFileSync(
     "docker",
     [
