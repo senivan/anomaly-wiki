@@ -64,6 +64,7 @@ const counts = tests.reduce(
 );
 const failed = tests.filter((test) => test.status === "failed");
 const timedOut = tests.filter((test) => test.status === "timedOut");
+const unexpected = results.stats?.unexpected ?? (failed.length + timedOut.length);
 const totalDuration = tests.reduce((sum, test) => sum + test.duration, 0);
 
 const lines = [
@@ -71,7 +72,7 @@ const lines = [
   "",
   `- Total: ${counts.total}`,
   `- Passed: ${counts.passed ?? 0}`,
-  `- Failed: ${failed.length}`,
+  `- Failed: ${unexpected}`,
   `- Timed out: ${timedOut.length}`,
   `- Skipped: ${counts.skipped ?? 0}`,
   `- Duration: ${formatDuration(totalDuration)}`,
