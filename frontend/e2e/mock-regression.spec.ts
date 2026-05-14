@@ -23,7 +23,7 @@ test("mobile navigation can reach login, search, and wiki read @mobile", async (
 
   await authenticate(page, token);
   await page.goto("/");
-  await expect(page.getByText("Search")).toBeVisible();
+  await expect(page.locator(".sidebar .nav-item").filter({ hasText: /^Search$/ })).toBeVisible();
   await page.goto(`/search?q=${encodeURIComponent("nothing")}`);
   await expect(page.getByRole("heading", { name: "Search the archive" })).toBeVisible();
 

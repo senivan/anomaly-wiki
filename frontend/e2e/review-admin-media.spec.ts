@@ -27,7 +27,7 @@ test("editor publishes a review-state page from the UI", async ({ page, request 
   await page.goto(`/wiki/${slug}`);
   await expect(page.getByRole("button", { name: /Publish/ })).toBeVisible();
   await page.getByRole("button", { name: /Publish/ }).click();
-  await expect(page.getByText("Published")).toBeVisible();
+  await expect(page.getByRole("definition").filter({ hasText: /^Published$/ })).toBeVisible();
 });
 
 test("admin changes a user role and the new role takes effect on next login", async ({ page, request }) => {
@@ -46,7 +46,9 @@ test("admin changes a user role and the new role takes effect on next login", as
   await expect(page.getByText("Role changes take effect on the user's next login")).toBeVisible();
 
   await page.locator(".topbar__user button").click();
-  await page.getByRole("link", { name: "Sign in" }).click();
+  await page.waitForURL("/");
+  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+  await page.goto("/login");
   await page.getByLabel("Email").fill(researcher.email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();

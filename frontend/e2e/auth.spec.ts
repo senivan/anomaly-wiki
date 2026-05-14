@@ -14,7 +14,7 @@ test("registers, logs in, and logs out through the UI @mobile", async ({ page })
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("My drafts")).toBeVisible();
+  await expect(page.locator(".sidebar .nav-item").filter({ hasText: /^My drafts$/ })).toBeVisible();
   await expect(page.getByText("Researcher · L2")).toBeVisible();
 
   await page.locator(".topbar__user button").click();

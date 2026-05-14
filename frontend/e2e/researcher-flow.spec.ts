@@ -26,8 +26,8 @@ test("researcher creates, edits, searches, and reopens a wiki page @mobile", asy
   await expect(page).toHaveURL(new RegExp(`/wiki/${slug}$`));
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
   await expect(page.getByText("E2E daily flow summary.")).toBeVisible();
-  await expect(page.getByText("Draft")).toBeVisible();
-  await expect(page.getByText("Public")).toBeVisible();
+  await expect(page.getByRole("definition").filter({ hasText: /^Draft$/ })).toBeVisible();
+  await expect(page.getByRole("definition").filter({ hasText: /^Public$/ })).toBeVisible();
   await expect(page.getByText("The frontend created this record.")).toBeVisible();
 
   await page.getByRole("link", { name: /Edit/ }).first().click();
