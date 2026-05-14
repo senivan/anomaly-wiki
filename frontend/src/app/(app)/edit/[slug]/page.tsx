@@ -207,16 +207,18 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
           <div className="kicker" style={{ marginBottom: 12 }}>New record metadata</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
             <div className="form-field">
-              <label>Slug (URL identifier)</label>
+              <label htmlFor="page-slug">Slug (URL identifier)</label>
               <input
+                id="page-slug"
                 value={newSlug}
                 onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
                 placeholder="gravity-funnel"
               />
             </div>
             <div className="form-field">
-              <label>Type</label>
+              <label htmlFor="page-type">Type</label>
               <select
+                id="page-type"
                 value={type}
                 onChange={(e) => setType(e.target.value as PageType)}
                 style={{ border: "1px solid var(--rule)", background: "var(--paper-2)", padding: "9px 12px", fontFamily: "JetBrains Mono", fontSize: 13, color: "var(--ink)" }}
@@ -225,8 +227,9 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
               </select>
             </div>
             <div className="form-field">
-              <label>Visibility</label>
+              <label htmlFor="page-visibility">Visibility</label>
               <select
+                id="page-visibility"
                 value={visibility}
                 onChange={(e) => setVis(e.target.value as Visibility)}
                 style={{ border: "1px solid var(--rule)", background: "var(--paper-2)", padding: "9px 12px", fontFamily: "JetBrains Mono", fontSize: 13, color: "var(--ink)" }}
@@ -241,12 +244,12 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
 
       <div style={{ marginBottom: 14, display: "flex", gap: 8, fontFamily: "JetBrains Mono", fontSize: 12, flexWrap: "wrap" }}>
         <div className="form-field" style={{ marginBottom: 0, flex: 1, minWidth: 200 }}>
-          <label>Title</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Record title" />
+          <label htmlFor="page-title">Title</label>
+          <input id="page-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Record title" />
         </div>
         <div className="form-field" style={{ marginBottom: 0, flex: 2, minWidth: 300 }}>
-          <label>Summary</label>
-          <input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="One-sentence summary" />
+          <label htmlFor="page-summary">Summary</label>
+          <input id="page-summary" value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="One-sentence summary" />
         </div>
       </div>
 

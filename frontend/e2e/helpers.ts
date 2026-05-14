@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 export const gatewayURL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://127.0.0.1:8000";
@@ -50,7 +51,10 @@ export function promoteUser(email: string, role: "Editor" | "Admin") {
       "-c",
       `UPDATE "user" SET role = '${dbRole}' WHERE email = '${email}';`,
     ],
-    { stdio: "pipe" },
+    {
+      stdio: "pipe",
+      cwd: path.resolve(process.cwd(), ".."),
+    },
   );
 }
 
