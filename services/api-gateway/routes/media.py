@@ -86,6 +86,15 @@ async def proxy_upload_media(
     return await _proxy_media_request(request, auth, settings, "/media")
 
 
+@router.get("")
+async def proxy_list_media_assets(
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    return await _proxy_media_request(request, auth, settings, "/media")
+
+
 @router.get("/{asset_id}")
 async def proxy_get_media_asset(
     asset_id: UUID,

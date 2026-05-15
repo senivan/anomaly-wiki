@@ -27,6 +27,20 @@ async def _forward_protected_page_request(
     )
 
 
+@router.get("/mine")
+async def proxy_list_my_pages(
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    return await _forward_protected_page_request(
+        request,
+        auth=auth,
+        upstream_path="/pages/mine",
+        settings=settings,
+    )
+
+
 @router.get("/{page_id}")
 async def proxy_get_page_state(
     page_id: UUID,

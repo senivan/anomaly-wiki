@@ -9,6 +9,17 @@ from tests.test_auth_validation import build_auth_keypair, issue_token
 def build_upstream_pages_app() -> FastAPI:
     app = FastAPI()
 
+    @app.get("/pages/mine")
+    async def list_my_pages(request: Request) -> JSONResponse:
+        return JSONResponse(
+            {
+                "source": request.headers.get("x-authenticated-source"),
+                "user_id": request.headers.get("x-authenticated-user-id"),
+                "role": request.headers.get("x-authenticated-user-role"),
+                "authorization": request.headers.get("authorization"),
+            }
+        )
+
     @app.get("/pages/{page_id}")
     async def get_page(page_id: str, request: Request) -> JSONResponse:
         return JSONResponse(
@@ -152,6 +163,31 @@ async def test_page_read_by_slug_forwards_with_gateway_identity_headers() -> Non
         "role": "Researcher",
         "authorization": None,
     }
+
+
+async def test_my_pages_forwards_with_gateway_identity_headers() -> None:
+    private_key, jwk = build_auth_keypair()
+    token = issue_token(private_key, role="Researcher")
+    upstream = build_upstream_pages_app()
+    app = create_app(upstream_transport=ASGITransport(app=upstream))
+    app.state.jwks_cache._keys = [jwk]
+    app.state.jwks_cache._expires_at = 10**12
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/pages/mine?status=Draft",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Authenticated-User-Id": "spoofed",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "api-gateway"
+    assert body["user_id"] != "spoofed"
+    assert body["role"] == "Researcher"
+    assert body["authorization"] is None
 
 
 async def test_page_read_with_invalid_token_returns_401() -> None:

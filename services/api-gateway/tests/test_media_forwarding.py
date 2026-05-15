@@ -78,9 +78,12 @@ async def test_media_read_routes_require_authentication() -> None:
     app = create_app()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        list_response = await client.get("/media")
         metadata_response = await client.get(f"/media/{asset_id}")
         url_response = await client.get(f"/media/{asset_id}/download-url")
 
+    assert list_response.status_code == 401
+    assert list_response.json()["error"]["code"] == "missing_bearer_token"
     assert metadata_response.status_code == 401
     assert metadata_response.json()["error"]["code"] == "missing_bearer_token"
     assert url_response.status_code == 401
@@ -208,3 +211,38 @@ async def test_media_metadata_and_download_url_are_forwarded() -> None:
     assert metadata_response.json() == {"asset_id": asset_id, "role": "Editor"}
     assert url_response.status_code == 200
     assert url_response.json() == {"asset_id": asset_id, "source": "api-gateway"}
+
+
+async def test_media_list_is_forwarded() -> None:
+    private_key, jwk = build_auth_keypair()
+    token = issue_token(private_key, role="Researcher")
+
+    upstream_app = FastAPI()
+
+    @upstream_app.get("/media")
+    async def list_media(request: Request) -> JSONResponse:
+        return JSONResponse(
+            [
+                {
+                    "filename": "field-note.txt",
+                    "role": request.headers.get("x-authenticated-user-role"),
+                    "source": request.headers.get("x-authenticated-source"),
+                }
+            ]
+        )
+
+    app = create_app(upstream_transport=ASGITransport(app=upstream_app))
+    app.state.jwks_cache._keys = [jwk]
+    app.state.jwks_cache._expires_at = 10**12
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/media", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "filename": "field-note.txt",
+            "role": "Researcher",
+            "source": "api-gateway",
+        }
+    ]

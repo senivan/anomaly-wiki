@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AuthGuard } from "@/components/ui/AuthGuard";
 import { PageTypeChip } from "@/components/ui/PageTypeChip";
-import { searchApi } from "@/lib/api/search";
+import { pagesApi } from "@/lib/api/pages";
 import { useAuthStore } from "@/lib/store/auth";
 
 export default function DraftsPage() {
@@ -19,11 +19,12 @@ function DraftsInner() {
   const { token } = useAuthStore();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["search", "drafts"],
-    queryFn: () => searchApi.query({ q: "e2e", status: "Draft" }, token ?? undefined),
+    queryKey: ["pages", "mine", "Draft"],
+    queryFn: () => pagesApi.listMine({ status: "Draft" }, token!),
+    enabled: !!token,
   });
 
-  const drafts = data?.hits ?? [];
+  const drafts = data?.pages ?? [];
 
   return (
     <div>
@@ -31,27 +32,27 @@ function DraftsInner() {
       <h1 className="bigtitle" style={{ marginTop: 4, marginBottom: 18 }}>Drafts &amp; pending records</h1>
 
       {isLoading && (
-        <div className="muted">Loading drafts…</div>
+        <div className="muted">Loading drafts...</div>
       )}
 
       <div className="results">
-        {drafts.map((p) => (
-          <div key={p.page_id} className="result-row">
-            <div className="result-row__code mono">{p.slug}</div>
+        {drafts.map((state) => (
+          <div key={state.page.id} className="result-row">
+            <div className="result-row__code mono">{state.page.slug}</div>
             <div>
               <div className="row" style={{ gap: 8, marginBottom: 2 }}>
-                <PageTypeChip type={p.type} />
+                <PageTypeChip type={state.page.type} />
               </div>
-              <h3>{p.title}</h3>
-              <p>{p.snippet}</p>
+              <h3>{state.current_draft_revision?.title ?? state.page.slug}</h3>
+              <p>{state.current_draft_revision?.summary || "No summary provided."}</p>
               <div className="result-row__meta">
-                {(p.tags ?? []).slice(0, 3).map((t) => <span key={t}>#{t}</span>)}
+                {state.page.tags.slice(0, 3).map((t) => <span key={t}>#{t}</span>)}
               </div>
             </div>
             <div className="result-row__side">
               <button
                 className="btn btn--sm"
-                onClick={() => router.push(`/edit/${p.slug}`)}
+                onClick={() => router.push(`/edit/${state.page.slug}`)}
               >
                 Continue editing
               </button>

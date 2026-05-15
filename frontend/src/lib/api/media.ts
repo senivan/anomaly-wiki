@@ -2,6 +2,9 @@ import { request } from "./client";
 import type { MediaAsset } from "./types";
 
 export const mediaApi = {
+  list: (token: string) =>
+    request<MediaAsset[]>("/media", { token }),
+
   upload: (formData: FormData, token: string) =>
     fetch(
       `${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000"}/media`,
@@ -13,7 +16,11 @@ export const mediaApi = {
     ).then(async (res) => {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { detail?: string }).detail ?? "Upload failed");
+        const detail =
+          (body as { detail?: string }).detail ??
+          (body as { error?: { message?: string } }).error?.message ??
+          "Upload failed";
+        throw new Error(detail);
       }
       return res.json() as Promise<MediaAsset>;
     }),

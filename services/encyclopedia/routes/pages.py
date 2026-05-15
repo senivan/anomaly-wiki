@@ -1,10 +1,11 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import get_async_session
+from domain import PageStatus
 from page_service import (
     InvalidMetadataError,
     InvalidParentRevisionError,
@@ -19,6 +20,7 @@ from schemas import (
     CreatePageRequest,
     PageDraftResponse,
     PageRevisionListResponse,
+    PageStateListResponse,
     PageStateResponse,
     PublishRevisionRequest,
     RevertRevisionRequest,
@@ -34,6 +36,15 @@ router = APIRouter(prefix="/pages", tags=["pages"])
 
 def _get_publisher(request: Request):
     return request.app.state.publisher
+
+
+def _authenticated_user_id(uploaded_by_header: str | None) -> UUID:
+    if uploaded_by_header is None:
+        raise HTTPException(status_code=401, detail="Authenticated user id is required.")
+    try:
+        return UUID(uploaded_by_header)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Authenticated user id must be a UUID.") from exc
 
 
 @router.post("", response_model=PageDraftResponse, status_code=status.HTTP_201_CREATED)
@@ -54,6 +65,27 @@ async def create_page(
     except Exception as exc:
         logger.warning("Failed to publish page.created for page %s: %s", page.id, exc)
     return PageDraftResponse(page=page, revision=revision)
+
+
+@router.get("/mine", response_model=PageStateListResponse)
+async def list_my_pages(
+    status_filter: PageStatus | None = Query(default=None, alias="status"),
+    authenticated_user_id: str | None = Header(default=None, alias="X-Authenticated-User-Id"),
+    session: AsyncSession = Depends(get_async_session),
+) -> PageStateListResponse:
+    author_id = _authenticated_user_id(authenticated_user_id)
+    service = PageService(session)
+    pages = await service.list_pages_for_author(author_id, status=status_filter)
+    return PageStateListResponse(
+        pages=[
+            PageStateResponse(
+                page=page,
+                current_draft_revision=current_draft_revision,
+                current_published_revision=current_published_revision,
+            )
+            for page, current_draft_revision, current_published_revision in pages
+        ]
+    )
 
 
 @router.post(

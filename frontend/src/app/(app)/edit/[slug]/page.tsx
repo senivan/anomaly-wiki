@@ -94,6 +94,7 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
         summary,
         content: md,
         expected_page_version: page!.version,
+        author_id: user?.id,
       },
       token!,
     ),

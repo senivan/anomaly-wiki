@@ -12,6 +12,13 @@ import type {
 } from "./types";
 
 export const pagesApi = {
+  listMine: (params: { status?: string }, token: string) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return request<{ pages: PageState[] }>(`/pages/mine${suffix}`, { token });
+  },
+
   getBySlug: (slug: string, token?: string) =>
     request<PageState>(`/pages/slug/${slug}`, { token }),
 

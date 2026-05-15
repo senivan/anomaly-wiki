@@ -102,6 +102,7 @@ export interface CreateDraftRequest {
   summary: string;
   content: string;
   expected_page_version: number;
+  author_id?: string;
 }
 
 export interface PublishRequest {

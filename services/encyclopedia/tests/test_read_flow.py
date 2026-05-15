@@ -80,6 +80,71 @@ async def test_get_page_state_by_slug_returns_current_draft(tmp_path, monkeypatc
     assert body["current_draft_revision"]["id"] == edit_body["revision"]["id"]
 
 
+async def test_list_my_draft_pages_returns_current_user_pages(tmp_path, monkeypatch) -> None:
+    app = await create_test_app(tmp_path, monkeypatch)
+    user_id = "11111111-1111-1111-1111-111111111111"
+    other_user_id = "22222222-2222-2222-2222-222222222222"
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        first_response = await client.post(
+            "/pages",
+            json={
+                "slug": "my-controller-note",
+                "type": "Researcher Note",
+                "visibility": "Internal",
+                "title": "My Controller Note",
+                "summary": "Private draft.",
+                "content": "Draft body.",
+                "author_id": user_id,
+            },
+        )
+        await client.post(
+            "/pages",
+            json={
+                "slug": "someone-else-note",
+                "type": "Researcher Note",
+                "visibility": "Internal",
+                "title": "Other Note",
+                "summary": "Other draft.",
+                "content": "Other body.",
+                "author_id": other_user_id,
+            },
+        )
+        second_response = await client.post(
+            "/pages",
+            json={
+                "slug": "my-artifact-note",
+                "type": "Artifact",
+                "visibility": "Internal",
+                "title": "My Artifact Note",
+                "summary": "Another private draft.",
+                "content": "More draft body.",
+                "author_id": user_id,
+            },
+        )
+
+        response = await client.get(
+            "/pages/mine?status=Draft",
+            headers={"X-Authenticated-User-Id": user_id},
+        )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+    assert response.status_code == 200
+    body = response.json()
+    assert {item["page"]["slug"] for item in body["pages"]} == {
+        "my-artifact-note",
+        "my-controller-note",
+    }
+    assert {item["current_draft_revision"]["title"] for item in body["pages"]} == {
+        "My Artifact Note",
+        "My Controller Note",
+    }
+
+
 async def test_list_page_revisions_returns_full_history(tmp_path, monkeypatch) -> None:
     app = await create_test_app(tmp_path, monkeypatch)
     async with AsyncClient(

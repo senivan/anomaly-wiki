@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore, hasRole } from "@/lib/store/auth";
+import { pagesApi } from "@/lib/api/pages";
 import { searchApi } from "@/lib/api/search";
 import { Icon } from "@/components/ui/Icon";
 import { PageTypeChip } from "@/components/ui/PageTypeChip";
@@ -19,8 +20,9 @@ export default function HomePage() {
     queryFn: () => searchApi.query({ q: "e2e", status: "Published", sort: "updated" }, tok),
   });
   const { data: draftData } = useQuery({
-    queryKey: ["search", "draft-count"],
-    queryFn: () => searchApi.query({ q: "e2e", status: "Draft" }, tok),
+    queryKey: ["pages", "mine", "draft-count", user?.id],
+    queryFn: () => pagesApi.listMine({ status: "Draft" }, token!),
+    enabled: !!token && !!user && hasRole(user.role, "Researcher"),
   });
   const { data: reviewData } = useQuery({
     queryKey: ["search", "review-count"],
@@ -30,7 +32,7 @@ export default function HomePage() {
   const recent = (publishedData?.hits ?? []).slice(0, 4);
   const activity = (publishedData?.hits ?? []).slice(0, 6);
   const publishedTotal = publishedData?.total ?? 0;
-  const draftTotal = draftData?.total;
+  const draftTotal = draftData?.pages.length;
   const reviewTotal = reviewData?.total;
 
   const name = user?.email.split("@")[0].split(".")[0] ?? "researcher";
