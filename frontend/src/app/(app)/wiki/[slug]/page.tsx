@@ -456,10 +456,13 @@ function generateDiff(oldText: string, newText: string): DiffLine[] {
 function MediaTab({ pageId, token }: { pageId: string; token: string | null }) {
   const { data } = useQuery({
     queryKey: ["page-media", pageId],
-    queryFn: () => pagesApi.getById(pageId, token ?? undefined)
-      .then((state) => Promise.all(
-        state.page.media_asset_ids.map((assetId) => mediaApi.getAsset(assetId, token!)),
-      )),
+    queryFn: async () => {
+      if (!token) return [];
+      const state = await pagesApi.getById(pageId, token);
+      return Promise.all(
+        state.page.media_asset_ids.map((assetId) => mediaApi.getAsset(assetId, token)),
+      );
+    },
     enabled: !!token,
   });
 
