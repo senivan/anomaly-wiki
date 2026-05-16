@@ -1,9 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/errors";
+
+function useHydrated() {
+  return useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
+}
 
 export default function RegisterPage() {
   const [email, setEmail]       = useState("");
@@ -11,6 +19,7 @@ export default function RegisterPage() {
   const [confirm, setConfirm]   = useState("");
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
+  const ready                   = useHydrated();
   const router                  = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -64,7 +73,7 @@ export default function RegisterPage() {
               type="submit"
               className="btn btn--primary"
               style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
-              disabled={loading}
+              disabled={!ready || loading}
             >
               {loading ? "Registering…" : "Create account"}
             </button>

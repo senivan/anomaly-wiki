@@ -12,7 +12,7 @@ export const authApi = {
   register: (email: string, password: string) =>
     request<CurrentUser>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, role: "Researcher" }),
     }),
 
   logout: (token: string) =>

@@ -17,7 +17,7 @@ export default function HomePage() {
 
   const { data: publishedData } = useQuery({
     queryKey: ["search", "recent-published"],
-    queryFn: () => searchApi.query({ q: "e2e", status: "Published", sort: "updated" }, tok),
+    queryFn: () => searchApi.query({ status: "Published", sort: "updated" }, tok),
   });
   const { data: draftData } = useQuery({
     queryKey: ["pages", "mine", "draft-count", user?.id],
@@ -26,7 +26,7 @@ export default function HomePage() {
   });
   const { data: reviewData } = useQuery({
     queryKey: ["search", "review-count"],
-    queryFn: () => searchApi.query({ q: "e2e", status: "Review" }, tok),
+    queryFn: () => searchApi.query({ status: "Review" }, tok),
   });
 
   const recent = (publishedData?.hits ?? []).slice(0, 4);

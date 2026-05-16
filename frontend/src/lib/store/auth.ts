@@ -26,7 +26,7 @@ interface AuthState {
   hydrate: () => void;
 }
 
-const TOKEN_KEY = "anomaly_wiki_token";
+export const TOKEN_KEY = "anomaly_wiki_token";
 
 function parseToken(token: string): AuthUser | null {
   try {

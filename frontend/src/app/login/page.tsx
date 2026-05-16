@@ -1,16 +1,25 @@
 "use client";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { authApi } from "@/lib/api/auth";
 import { useAuthStore } from "@/lib/store/auth";
 import { ApiError } from "@/lib/api/errors";
 
+function useHydrated() {
+  return useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
+}
+
 function LoginForm() {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
+  const ready                   = useHydrated();
   const { login }               = useAuthStore();
   const router                  = useRouter();
   const params                  = useSearchParams();
@@ -58,7 +67,7 @@ function LoginForm() {
         type="submit"
         className="btn btn--primary"
         style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
-        disabled={loading}
+        disabled={!ready || loading}
       >
         {loading ? "Authenticating…" : "Sign in"}
       </button>

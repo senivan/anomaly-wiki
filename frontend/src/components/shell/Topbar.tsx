@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { useAuthStore } from "@/lib/store/auth";
+import { TOKEN_KEY, useAuthStore } from "@/lib/store/auth";
 
 function useTheme() {
   const [dark, setDark] = useState(false);
@@ -102,7 +102,11 @@ export function Topbar() {
         {isAuthenticated && (
           <button
             className="btn btn--ghost btn--sm"
-            onClick={() => { logout(); router.push("/"); }}
+            onClick={() => {
+              localStorage.removeItem(TOKEN_KEY);
+              logout();
+              window.location.replace("/");
+            }}
           >
             <Icon name="x" size={11} />
           </button>

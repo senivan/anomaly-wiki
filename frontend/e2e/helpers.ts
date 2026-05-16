@@ -29,9 +29,11 @@ export async function loginApi(request: APIRequestContext, email: string) {
 }
 
 export async function authenticate(page: Page, token: string) {
-  await page.addInitScript((value) => {
+  await page.goto("/");
+  await page.evaluate((value) => {
     window.localStorage.setItem("anomaly_wiki_token", value);
   }, token);
+  await page.reload();
 }
 
 export function promoteUser(email: string, role: "Editor" | "Admin") {
