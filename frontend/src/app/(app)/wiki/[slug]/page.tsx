@@ -85,11 +85,17 @@ export default function WikiPage() {
   });
 
   const publishMutation = useMutation({
-    mutationFn: () => pagesApi.publish(
-      data!.page.id,
-      { revision_id: data!.page.current_draft_revision_id!, expected_page_version: data!.page.version },
-      token!,
-    ),
+    mutationFn: () => {
+      const draftRevisionId = data?.page.current_draft_revision_id;
+      if (!data || !draftRevisionId) {
+        throw new Error("No draft revision available to publish.");
+      }
+      return pagesApi.publish(
+        data.page.id,
+        { revision_id: draftRevisionId, expected_page_version: data.page.version },
+        token!,
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["page", slug] }),
   });
 
@@ -118,6 +124,7 @@ export default function WikiPage() {
   const { page, current_published_revision, current_draft_revision } = data;
   const revision = current_published_revision ?? current_draft_revision;
   const revisions = (revisionsData?.revisions ?? []) as Revision[];
+  const canPublish = page.current_draft_revision_id !== null;
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "article",   label: "Article" },
@@ -184,7 +191,7 @@ export default function WikiPage() {
               <button
                 className="btn btn--primary btn--sm"
                 onClick={() => publishMutation.mutate()}
-                disabled={publishMutation.isPending}
+                disabled={publishMutation.isPending || !canPublish}
               >
                 <Icon name="check" size={11} /> Publish
               </button>
