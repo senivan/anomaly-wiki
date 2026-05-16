@@ -40,6 +40,14 @@ class MediaAssetRepository:
     async def get_asset(self, asset_id: UUID) -> MediaAssetRecord | None:
         return await self.session.get(MediaAssetRecord, asset_id)
 
+    async def get_assets_by_ids(self, asset_ids: list[UUID]) -> list[MediaAssetRecord]:
+        if not asset_ids:
+            return []
+        result = await self.session.execute(
+            select(MediaAssetRecord).where(MediaAssetRecord.id.in_(asset_ids))
+        )
+        return list(result.scalars().all())
+
     async def list_assets_for_user(
         self,
         uploaded_by: UUID,

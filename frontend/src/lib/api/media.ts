@@ -29,6 +29,9 @@ export const mediaApi = {
   getAsset: (assetId: string, token: string) =>
     request<MediaAsset>(`/media/${assetId}`, { token }),
 
+  getByIds: (assetIds: string[], token: string) =>
+    request<MediaAsset[]>(`/media/batch?ids=${assetIds.join(",")}`, { token }),
+
   getDownloadUrl: (assetId: string, token: string) =>
     request<{ url: string }>(`/media/${assetId}/download-url`, { token }),
 };

@@ -267,7 +267,7 @@ export default function WikiPage() {
         />
       )}
       {tab === "revisions" && <RevisionsTab revisions={revisions} />}
-      {tab === "media"     && <MediaTab pageId={page.id} token={token} />}
+      {tab === "media"     && <MediaTab mediaAssetIds={page.media_asset_ids} token={token} />}
       {tab === "discussion"&& <DiscussionTab />}
       {tab === "raw"       && <RawTab page={page} revision={revision} />}
     </div>
@@ -465,16 +465,10 @@ function generateDiff(oldText: string, newText: string): DiffLine[] {
   return lines;
 }
 
-function MediaTab({ pageId, token }: { pageId: string; token: string | null }) {
+function MediaTab({ mediaAssetIds, token }: { mediaAssetIds: string[]; token: string | null }) {
   const { data } = useQuery({
-    queryKey: ["page-media", pageId],
-    queryFn: async () => {
-      if (!token) return [];
-      const state = await pagesApi.getById(pageId, token);
-      return Promise.all(
-        state.page.media_asset_ids.map((assetId) => mediaApi.getAsset(assetId, token)),
-      );
-    },
+    queryKey: ["page-media", mediaAssetIds],
+    queryFn: () => mediaAssetIds.length === 0 ? [] : mediaApi.getByIds(mediaAssetIds, token!),
     enabled: !!token,
   });
 
