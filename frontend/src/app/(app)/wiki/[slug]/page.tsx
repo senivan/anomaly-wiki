@@ -159,6 +159,9 @@ export default function WikiPage() {
   const revision = current_published_revision ?? current_draft_revision;
   const revisions = (revisionsData?.revisions ?? []) as Revision[];
   const canPublish = page.current_draft_revision_id !== null;
+  const canEditDraft =
+    user?.role === "Researcher" &&
+    current_draft_revision?.author_id === user.id;
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "article",   label: "Article" },
@@ -207,12 +210,12 @@ export default function WikiPage() {
             <dt>Updated</dt>   <dd>{page.updated_at.slice(0, 10)}</dd>
           </dl>
           <div className="row" style={{ marginTop: 14, gap: 6, flexWrap: "wrap" }}>
-            {user && hasRole(user.role, "Researcher") && (
+            {canEditDraft && (
               <Link href={`/edit/${page.slug}`} className="btn btn--sm">
                 <Icon name="edit" size={11} /> Edit
               </Link>
             )}
-            {user && hasRole(user.role, "Researcher") && page.status === "Draft" && (
+            {canEditDraft && page.status === "Draft" && (
               <button
                 className="btn btn--ghost btn--sm"
                 onClick={() => submitMutation.mutate()}
