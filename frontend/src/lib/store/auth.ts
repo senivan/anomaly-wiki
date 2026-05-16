@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { jwtDecode } from "jwt-decode";
 import type { UserRole } from "@/lib/api/types";
+import { setUnauthorizedHandler } from "@/lib/api/client";
 
 interface JwtPayload {
   sub: string;
@@ -42,7 +43,7 @@ function parseToken(token: string): AuthUser | null {
   }
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   user: null,
   isAuthenticated: false,
@@ -62,6 +63,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   hydrate: () => {
     if (typeof window === "undefined") return;
+
+    setUnauthorizedHandler(() => {
+      get().logout();
+    });
+
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
       set({ isHydrated: true });

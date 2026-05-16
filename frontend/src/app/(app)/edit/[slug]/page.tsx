@@ -39,7 +39,7 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
   const { setBaseline, markDirty, reset } = useEditorStore();
   const qc = useQueryClient();
 
-  const { data, error, isFetching, isLoading, isError, refetch } = useQuery({
+  const { data, isFetching, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["page", slug],
     queryFn: () => pagesApi.getBySlug(slug, token ?? undefined),
     enabled: !isNew,
@@ -198,8 +198,17 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
     },
   });
 
-  const handleSave = () => { markDirty(); draftMutation.mutate(); };
+  const handleSave = () => { draftMutation.mutate(); };
   const handleNew  = () => createMutation.mutate();
+
+  const handleConflictReload = () => {
+    const ok = window.confirm(
+      "Reloading will discard your unsaved edits. Continue?",
+    );
+    if (!ok) return;
+    setConflict(false);
+    qc.invalidateQueries({ queryKey: ["page", slug] });
+  };
 
   const lineCount = md.split("\n").length;
   const charCount = md.length;
@@ -293,9 +302,9 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
                 <button
                   className="btn btn--primary btn--sm"
                   onClick={() => submitMutation.mutate()}
-                  disabled={submitMutation.isPending}
+                  disabled={submitMutation.isPending || (data !== undefined && isFetching) || draftMutation.isPending}
                 >
-                  <Icon name="check" size={11} /> Submit for review
+                  <Icon name="check" size={11} /> {(data !== undefined && isFetching) ? "Syncing…" : "Submit for review"}
                 </button>
               )}
             </>
@@ -391,7 +400,7 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
             Another user modified this record. Please{" "}
             <button
               className="btn btn--ghost btn--sm"
-              onClick={() => { setConflict(false); qc.invalidateQueries({ queryKey: ["page", slug] }); }}
+              onClick={handleConflictReload}
             >
               Reload latest
             </button>
