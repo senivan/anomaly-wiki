@@ -18,16 +18,44 @@ type Tab = "article" | "revisions" | "media" | "discussion" | "raw";
 
 const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000";
 
+function extractAssetId(value: string): string | null {
+  const match = value.match(
+    /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
+  );
+  return match?.[1] ?? null;
+}
+
 function resolveMarkdownImageSrc(src: string | undefined, slug: string): string | undefined {
   if (!src) return src;
   try {
     const url = new URL(src, window.location.href);
-    const match = url.pathname.match(/\/(?:anomaly-media\/)?assets\/([0-9a-f-]{36})\//i);
-    if (!match) return src;
-    return `${GATEWAY}/pages/slug/${encodeURIComponent(slug)}/media/${match[1]}/content`;
+    const assetId =
+      extractAssetId(url.pathname) ??
+      extractAssetId(url.search) ??
+      extractAssetId(src);
+    if (!assetId) return src;
+    return `${GATEWAY}/pages/slug/${encodeURIComponent(slug)}/media/${assetId}/content`;
   } catch {
     return src;
   }
+}
+
+function normalizeClassifications(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry): entry is string => typeof entry === "string")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => typeof entry === "string")
+      .map(([key, entry]) => `${key}: ${String(entry).trim()}`)
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 export default function WikiPage() {
@@ -199,6 +227,10 @@ function ArticleTab({ page, revision, userRole, slug }: {
   userRole?: string;
   slug: string;
 }) {
+  const classifications = normalizeClassifications(
+    (page as { classifications?: unknown }).classifications,
+  );
+
   return (
     <div className="article-grid">
       <div className="prose">
@@ -264,7 +296,10 @@ function ArticleTab({ page, revision, userRole, slug }: {
         <div style={{ marginTop: 32 }}>
           <h6 className="kicker" style={{ marginBottom: 8 }}>Classification</h6>
           <dl style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-2)" }}>
-            {(page.classifications ?? []).map((classification) => (
+            {classifications.length === 0 && (
+              <dd style={{ margin: "0 0 4px" }}>—</dd>
+            )}
+            {classifications.map((classification) => (
               <dd key={classification} style={{ margin: "0 0 4px" }}>{classification}</dd>
             ))}
           </dl>
