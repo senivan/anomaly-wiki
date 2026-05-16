@@ -1,3 +1,95 @@
+x-encyclopedia: &encyclopedia-base
+  build:
+    context: .
+    dockerfile: services/encyclopedia/Dockerfile
+  depends_on:
+    db:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+  environment:
+    ENCYCLOPEDIA_SERVICE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/encyclopedia_db
+    ENCYCLOPEDIA_SERVICE_RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672/
+  expose:
+    - "8000"
+  healthcheck:
+    test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=2).close()\""]
+    interval: 5s
+    timeout: 5s
+    retries: 10
+  restart: unless-stopped
+
+x-researcher-auth: &researcher-auth-base
+  build:
+    context: .
+    dockerfile: services/researcher-auth-service/Dockerfile
+  depends_on:
+    db:
+      condition: service_healthy
+  volumes:
+    - ./services/researcher-auth-service/secrets:/etc/secrets/auth:ro
+  environment:
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/auth_db
+  expose:
+    - "8000"
+  healthcheck:
+    test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).close()\""]
+    interval: 5s
+    timeout: 5s
+    retries: 10
+  restart: unless-stopped
+
+x-media: &media-base
+  build:
+    context: .
+    dockerfile: services/media-service/Dockerfile
+  depends_on:
+    db:
+      condition: service_healthy
+    minio:
+      condition: service_healthy
+  environment:
+    MEDIA_SERVICE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/media_db
+    MEDIA_SERVICE_OBJECT_STORAGE_ENDPOINT: minio:9000
+    MEDIA_SERVICE_OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+    MEDIA_SERVICE_OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
+    MEDIA_SERVICE_OBJECT_STORAGE_BUCKET: anomaly-media
+    MEDIA_SERVICE_OBJECT_STORAGE_SECURE: "false"
+    MEDIA_SERVICE_PUBLIC_STORAGE_BASE_URL: http://localhost:9000
+  expose:
+    - "8000"
+  healthcheck:
+    test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=2).close()\""]
+    interval: 5s
+    timeout: 5s
+    retries: 10
+  restart: unless-stopped
+
+x-search: &search-base
+  build:
+    context: .
+    dockerfile: services/search-service/Dockerfile
+  depends_on:
+    opensearch:
+      condition: service_healthy
+  environment:
+    SEARCH_SERVICE_OPENSEARCH_URL: http://opensearch:9200
+    SEARCH_SERVICE_OPENSEARCH_INDEX: anomaly-wiki-pages
+    SEARCH_SERVICE_INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN must be set}
+  expose:
+    - "8000"
+  deploy:
+    resources:
+      limits:
+        cpus: '0.50'
+        memory: 256M
+  healthcheck:
+    test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/readiness', timeout=2).close()\""]
+    interval: 5s
+    timeout: 5s
+    retries: 10
+  restart: unless-stopped
+
 services:
   db:
     image: postgres:15-alpine
@@ -86,91 +178,74 @@ services:
       timeout: 10s
       retries: 24
 
-  researcher-auth-service:
-    build:
-      context: .
-      dockerfile: services/researcher-auth-service/Dockerfile
-    depends_on:
-      db:
-        condition: service_healthy
+  researcher-auth-service-1:
+    <<: *researcher-auth-base
+
+  researcher-auth-service-2:
+    <<: *researcher-auth-base
+
+  researcher-auth-service-3:
+    <<: *researcher-auth-base
+
+  encyclopedia-service-1:
+    <<: *encyclopedia-base
+
+  encyclopedia-service-2:
+    <<: *encyclopedia-base
+
+  encyclopedia-service-3:
+    <<: *encyclopedia-base
+
+  media-service-1:
+    <<: *media-base
+
+  media-service-2:
+    <<: *media-base
+
+  media-service-3:
+    <<: *media-base
+
+  search-service-1:
+    <<: *search-base
+
+  search-service-2:
+    <<: *search-base
+
+  search-service-3:
+    <<: *search-base
+
+  haproxy:
+    image: haproxy:2.9-alpine
     volumes:
-      - ./services/researcher-auth-service/secrets:/etc/secrets/auth:ro
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/auth_db
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).close()\""]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  encyclopedia-service:
-    build:
-      context: .
-      dockerfile: services/encyclopedia/Dockerfile
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "8404:8404"
     depends_on:
-      db:
+      encyclopedia-service-1:
         condition: service_healthy
-      rabbitmq:
+      encyclopedia-service-2:
         condition: service_healthy
-    environment:
-      ENCYCLOPEDIA_SERVICE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/encyclopedia_db
-      ENCYCLOPEDIA_SERVICE_RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672/
-    expose:
-      - "8000"
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=2).close()\""]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  media-service:
-    build:
-      context: .
-      dockerfile: services/media-service/Dockerfile
-    depends_on:
-      db:
+      encyclopedia-service-3:
         condition: service_healthy
-      minio:
+      researcher-auth-service-1:
         condition: service_healthy
-    environment:
-      MEDIA_SERVICE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@db:5432/media_db
-      MEDIA_SERVICE_OBJECT_STORAGE_ENDPOINT: minio:9000
-      MEDIA_SERVICE_OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
-      MEDIA_SERVICE_OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
-      MEDIA_SERVICE_OBJECT_STORAGE_BUCKET: anomaly-media
-      MEDIA_SERVICE_OBJECT_STORAGE_SECURE: "false"
-      MEDIA_SERVICE_PUBLIC_STORAGE_BASE_URL: http://localhost:9000
-    expose:
-      - "8000"
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=2).close()\""]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  search-service:
-    build:
-      context: .
-      dockerfile: services/search-service/Dockerfile
-    depends_on:
-      opensearch:
+      researcher-auth-service-2:
         condition: service_healthy
-    environment:
-      SEARCH_SERVICE_OPENSEARCH_URL: http://opensearch:9200
-      SEARCH_SERVICE_OPENSEARCH_INDEX: anomaly-wiki-pages
-      SEARCH_SERVICE_INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN must be set}
-    expose:
-      - "8000"
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 256M
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/readiness', timeout=2).close()\""]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      researcher-auth-service-3:
+        condition: service_healthy
+      media-service-1:
+        condition: service_healthy
+      media-service-2:
+        condition: service_healthy
+      media-service-3:
+        condition: service_healthy
+      search-service-1:
+        condition: service_healthy
+      search-service-2:
+        condition: service_healthy
+      search-service-3:
+        condition: service_healthy
+    restart: unless-stopped
 
   search-indexer:
     build:
@@ -181,16 +256,19 @@ services:
         condition: service_healthy
       opensearch:
         condition: service_healthy
-      encyclopedia-service:
+      encyclopedia-service-1:
         condition: service_healthy
-      search-service:
+      search-service-1:
         condition: service_healthy
+      haproxy:
+        condition: service_started
     environment:
       SEARCH_INDEXER_RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672/
       SEARCH_INDEXER_OPENSEARCH_URL: http://opensearch:9200
       SEARCH_INDEXER_OPENSEARCH_INDEX: anomaly-wiki-pages
-      SEARCH_INDEXER_ENCYCLOPEDIA_URL: http://encyclopedia-service:8000
+      SEARCH_INDEXER_ENCYCLOPEDIA_URL: http://haproxy:8001
     deploy:
+      replicas: 3
       resources:
         limits:
           cpus: '0.25'
@@ -202,19 +280,13 @@ services:
       context: .
       dockerfile: services/api-gateway/Dockerfile
     depends_on:
-      researcher-auth-service:
-        condition: service_healthy
-      encyclopedia-service:
-        condition: service_healthy
-      media-service:
-        condition: service_healthy
-      search-service:
-        condition: service_healthy
+      haproxy:
+        condition: service_started
     environment:
-      API_GATEWAY_RESEARCHER_AUTH_BASE_URL: http://researcher-auth-service:8000
-      API_GATEWAY_ENCYCLOPEDIA_BASE_URL: http://encyclopedia-service:8000
-      API_GATEWAY_MEDIA_SERVICE_BASE_URL: http://media-service:8000
-      API_GATEWAY_SEARCH_SERVICE_BASE_URL: http://search-service:8000
+      API_GATEWAY_RESEARCHER_AUTH_BASE_URL: http://haproxy:8002
+      API_GATEWAY_ENCYCLOPEDIA_BASE_URL: http://haproxy:8001
+      API_GATEWAY_MEDIA_SERVICE_BASE_URL: http://haproxy:8003
+      API_GATEWAY_SEARCH_SERVICE_BASE_URL: http://haproxy:8004
       API_GATEWAY_SEARCH_INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN must be set}
     ports:
       - "8000:8000"
