@@ -61,11 +61,18 @@ function UserRow({ user, token }: { user: AdminUser; token: string }) {
 
 export default function AdminPage() {
   const { token } = useAuthStore();
+  const [query, setQuery] = useState("");
 
   const { data: users, isFetching, error } = useQuery({
     queryKey: ["admin-users"],
     queryFn: () => adminApi.listUsers(token!),
     enabled: !!token,
+  });
+
+  const filteredUsers = (users ?? []).filter((user) => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+    return user.email.toLowerCase().includes(needle) || user.role.toLowerCase().includes(needle);
   });
 
   return (
@@ -84,8 +91,21 @@ export default function AdminPage() {
         <div className="card">
           <header className="card__head">
             <span>Registered researchers</span>
-            <span className="mono xsmall muted">{isFetching ? "loading…" : `${users?.length ?? 0} accounts`}</span>
+            <span className="mono xsmall muted">
+              {isFetching ? "loading…" : `${filteredUsers.length} / ${users?.length ?? 0} accounts`}
+            </span>
           </header>
+          <div className="card__body" style={{ borderBottom: "1px solid var(--rule)" }}>
+            <div className="form-field" style={{ marginBottom: 0, maxWidth: 520 }}>
+              <label htmlFor="admin-user-filter">Filter users</label>
+              <input
+                id="admin-user-filter"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Email or role"
+              />
+            </div>
+          </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
@@ -97,13 +117,13 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {(users ?? []).map((u) => (
+                {filteredUsers.map((u) => (
                   <UserRow key={u.id} user={u} token={token!} />
                 ))}
-                {!isFetching && !users?.length && (
+                {!isFetching && !filteredUsers.length && (
                   <tr>
                     <td colSpan={4} className="muted" style={{ padding: "24px 12px" }}>
-                      No users found.
+                      {query.trim() ? "No users match this filter." : "No users found."}
                     </td>
                   </tr>
                 )}
