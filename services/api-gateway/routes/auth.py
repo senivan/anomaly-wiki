@@ -22,12 +22,10 @@ async def _proxy_auth_request(
             settings=settings,
         )
     except GatewayUpstreamResponseError as exc:
-        if (
-            upstream_path == "/auth/login"
-            and exc.status_code == 400
-            and isinstance(exc.body, dict)
-            and exc.body.get("detail") == "LOGIN_BAD_CREDENTIALS"
-        ):
+        # fastapi-users returns 400 for all login failures (bad credentials,
+        # inactive user, unverified user). Validation errors use 422, so any
+        # 400 from the login endpoint is an authentication failure → 401.
+        if upstream_path == "/auth/login" and exc.status_code == 400:
             raise GatewayUpstreamResponseError(
                 service=exc.service,
                 status_code=401,

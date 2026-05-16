@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -104,6 +104,26 @@ class PageRepository:
             .order_by(RevisionRecord.created_at, RevisionRecord.id)
         )
         return list(result.scalars())
+
+    async def list_pages_by_author(
+        self,
+        author_id: UUID,
+        *,
+        status: PageStatus | None = None,
+        limit: int = 100,
+    ) -> list[PageRecord]:
+        query = (
+            self._page_query()
+            .join(RevisionRecord, RevisionRecord.id == PageRecord.current_draft_revision_id)
+            .where(RevisionRecord.author_id == author_id)
+            .order_by(desc(PageRecord.updated_at), desc(PageRecord.created_at))
+            .limit(limit)
+        )
+        if status is not None:
+            query = query.where(PageRecord.status == status)
+
+        result = await self.session.execute(query)
+        return list(result.scalars().unique())
 
     async def get_revision_lineage(self, revision_id: UUID) -> list[RevisionRecord]:
         lineage: list[RevisionRecord] = []

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from errors import register_exception_handlers
 from middleware import register_http_middleware
+from routes.admin import router as admin_router
 from routes.auth import router as auth_router
 from routes.health import router as health_router
 from routes.media import router as media_router
@@ -33,6 +34,7 @@ def create_app(*, upstream_transport: httpx.AsyncBaseTransport | None = None) ->
     )
     register_http_middleware(app)
     register_exception_handlers(app)
+    app.include_router(admin_router)
     app.include_router(auth_router)
     app.include_router(health_router)
     app.include_router(media_router)

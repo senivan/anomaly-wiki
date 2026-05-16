@@ -9,9 +9,9 @@ class Base(DeclarativeBase):
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole), 
-        default=UserRole.RESEARCHER, 
-        server_default=UserRole.RESEARCHER.name,
+        Enum(UserRole, values_callable=lambda roles: [role.value for role in roles], name="userrole"),
+        default=UserRole.RESEARCHER,
+        server_default=UserRole.RESEARCHER.value,
         nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(

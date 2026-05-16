@@ -31,7 +31,7 @@ def _is_internal_request(request: Request, settings: Settings) -> bool:
 
 def _build_search_body(
     *,
-    q: str,
+    q: str | None,
     page: int,
     size: int,
     type_: str | None,
@@ -40,16 +40,19 @@ def _build_search_body(
     tags: list[str] | None,
     internal: bool,
 ) -> dict:
-    must = [
-        {
-            "multi_match": {
-                "query": q,
-                "fields": ["title^3", "summary^2", "content_text", "aliases^2"],
-                "type": "best_fields",
-                "fuzziness": "AUTO",
+    if q:
+        must: list[dict] = [
+            {
+                "multi_match": {
+                    "query": q,
+                    "fields": ["title^3", "summary^2", "content_text", "aliases^2"],
+                    "type": "best_fields",
+                    "fuzziness": "AUTO",
+                }
             }
-        }
-    ]
+        ]
+    else:
+        must = [{"match_all": {}}]
     filters: list[dict] = []
 
     if not internal:
@@ -91,7 +94,7 @@ def _extract_snippet(highlight: dict) -> str:
 @router.get("/search", response_model=SearchResponse)
 async def search(
     request: Request,
-    q: Annotated[str, Query(min_length=1, max_length=500)],
+    q: Annotated[str | None, Query(min_length=1, max_length=500)] = None,
     type: Annotated[str | None, Query()] = None,
     visibility: Annotated[str | None, Query()] = None,
     status: Annotated[str | None, Query()] = None,

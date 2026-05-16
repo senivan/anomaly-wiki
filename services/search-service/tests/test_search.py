@@ -98,11 +98,13 @@ async def test_search_paginates_correctly():
     assert query_body["size"] == 5
 
 
-async def test_search_returns_422_when_q_missing():
-    app, _ = build_search_app(make_os_response([]))
+async def test_search_uses_match_all_when_q_missing():
+    app, fake_os = build_search_app(make_os_response([]))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/search")
-    assert response.status_code == 422
+    assert response.status_code == 200
+    query_body = fake_os.search.call_args.kwargs["body"]
+    assert query_body["query"]["bool"]["must"] == [{"match_all": {}}]
 
 
 async def test_suggest_returns_title_list():

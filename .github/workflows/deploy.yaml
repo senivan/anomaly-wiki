@@ -1,0 +1,53 @@
+name: Deploy to Proxmox LXC
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - linux
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Write production .env
+        run: |
+          umask 077
+          cat > .env <<'EOF'
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+
+          RABBITMQ_DEFAULT_USER=${{ secrets.RABBITMQ_DEFAULT_USER }}
+          RABBITMQ_DEFAULT_PASS=${{ secrets.RABBITMQ_DEFAULT_PASS }}
+
+          MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+          MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+
+          OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+
+          INTERNAL_TOKEN=${{ secrets.INTERNAL_TOKEN }}
+          EOF
+
+      - name: Deploy
+        run: |
+          docker compose config
+          docker compose up -d --build --remove-orphans
+
+      - name: Health check
+        run: |
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8000/health && exit 0
+            sleep 3
+          done
+
+          docker compose ps
+          docker compose logs --tail=200 api-gateway
+          exit 1

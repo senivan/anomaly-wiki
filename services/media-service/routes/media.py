@@ -54,6 +54,15 @@ def verify_gateway_source(
         )
 
 
+def _authenticated_user_id(uploaded_by_header: str | None) -> UUID:
+    if uploaded_by_header is None:
+        raise HTTPException(status_code=401, detail="Authenticated user id is required.")
+    try:
+        return UUID(uploaded_by_header)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Authenticated user id must be a UUID.") from exc
+
+
 @router.post(
     "",
     response_model=MediaAssetResponse,
@@ -68,12 +77,7 @@ async def upload_media(
     session: AsyncSession = Depends(get_async_session),
     storage_backend: ObjectStorage = Depends(get_storage),
 ) -> MediaAssetResponse:
-    if uploaded_by_header is None:
-        raise HTTPException(status_code=401, detail="Authenticated user id is required.")
-    try:
-        uploaded_by = UUID(uploaded_by_header)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Authenticated user id must be a UUID.") from exc
+    uploaded_by = _authenticated_user_id(uploaded_by_header)
 
     data = await file.read(settings.max_upload_bytes + 1)
     # NOTE: The entire file is buffered in memory (up to max_upload_bytes + 1
@@ -140,6 +144,21 @@ async def upload_media(
         raise
 
     return MediaAssetResponse.model_validate(asset)
+
+
+@router.get(
+    "",
+    response_model=list[MediaAssetResponse],
+    dependencies=[Depends(verify_gateway_source)],
+)
+async def list_media_assets(
+    uploaded_by_header: str | None = Header(default=None, alias="X-Authenticated-User-Id"),
+    session: AsyncSession = Depends(get_async_session),
+) -> list[MediaAssetResponse]:
+    uploaded_by = _authenticated_user_id(uploaded_by_header)
+    repository = MediaAssetRepository(session)
+    assets = await repository.list_assets_for_user(uploaded_by)
+    return [MediaAssetResponse.model_validate(asset) for asset in assets]
 
 
 @router.get(

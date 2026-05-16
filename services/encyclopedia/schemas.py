@@ -92,6 +92,10 @@ class PageStateResponse(BaseModel):
     current_published_revision: RevisionResponse | None
 
 
+class PageStateListResponse(BaseModel):
+    pages: list[PageStateResponse]
+
+
 class PageRevisionListResponse(BaseModel):
     page: PageResponse
     revisions: list[RevisionResponse]

@@ -111,6 +111,44 @@ async def test_upload_creates_metadata_and_object(monkeypatch) -> None:
     reset_caches()
 
 
+async def test_list_media_assets_returns_authenticated_users_uploads(monkeypatch) -> None:
+    storage = FakeObjectStorage()
+    app = await build_test_app(monkeypatch, storage)
+    uploaded_by = uuid4()
+    other_user = uuid4()
+
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            first_response = await client.post(
+                "/media",
+                headers={**GATEWAY_HEADERS, "X-Authenticated-User-Id": str(uploaded_by)},
+                files={"file": ("first.txt", b"first", "text/plain")},
+            )
+            await client.post(
+                "/media",
+                headers={**GATEWAY_HEADERS, "X-Authenticated-User-Id": str(other_user)},
+                files={"file": ("other.txt", b"other", "text/plain")},
+            )
+            second_response = await client.post(
+                "/media",
+                headers={**GATEWAY_HEADERS, "X-Authenticated-User-Id": str(uploaded_by)},
+                files={"file": ("second.txt", b"second", "text/plain")},
+            )
+
+            response = await client.get(
+                "/media",
+                headers={**GATEWAY_HEADERS, "X-Authenticated-User-Id": str(uploaded_by)},
+            )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+    assert response.status_code == 200
+    body = response.json()
+    assert [asset["filename"] for asset in body] == ["second.txt", "first.txt"]
+    assert {asset["uploaded_by"] for asset in body} == {str(uploaded_by)}
+    reset_caches()
+
+
 async def test_upload_requires_gateway_source_header(monkeypatch) -> None:
     """Requests without X-Authenticated-Source: api-gateway must be rejected."""
     app = await build_test_app(monkeypatch)
