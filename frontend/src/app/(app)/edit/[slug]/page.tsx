@@ -68,7 +68,6 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
   useEffect(() => {
     if (data) {
       const rev = data.current_draft_revision ?? data.current_published_revision;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(rev?.title ?? "");
       setSummary(rev?.summary ?? "");
       setMd(rev?.content ?? "");
