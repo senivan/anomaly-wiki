@@ -55,7 +55,7 @@ x-media: &media-base
     MEDIA_SERVICE_OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
     MEDIA_SERVICE_OBJECT_STORAGE_BUCKET: anomaly-media
     MEDIA_SERVICE_OBJECT_STORAGE_SECURE: "false"
-    MEDIA_SERVICE_PUBLIC_STORAGE_BASE_URL: http://localhost:9000
+    MEDIA_SERVICE_PUBLIC_STORAGE_BASE_URL: https://media-wiki.ucuserver.cc
   expose:
     - "8000"
   healthcheck:
