@@ -1,9 +1,10 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AuthGuard } from "@/components/ui/AuthGuard";
 import { Icon } from "@/components/ui/Icon";
 import { PageTypeChip } from "@/components/ui/PageTypeChip";
+import { pagesApi } from "@/lib/api/pages";
 import { searchApi } from "@/lib/api/search";
 import { useAuthStore } from "@/lib/store/auth";
 
@@ -18,10 +19,27 @@ export default function ReviewPage() {
 function ReviewInner() {
   const router = useRouter();
   const { token } = useAuthStore();
+  const authToken = token!;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["search", "review"],
     queryFn: () => searchApi.query({ status: "Review" }, token ?? undefined),
+  });
+
+  const qc = useQueryClient();
+
+  const publishMutation = useMutation({
+    mutationFn: async (pageId: string) => {
+      const state = await pagesApi.getById(pageId, authToken);
+      const draftRevisionId = state.page.current_draft_revision_id;
+      if (!draftRevisionId) throw new Error("No draft revision available to publish.");
+      return pagesApi.publish(
+        pageId,
+        { revision_id: draftRevisionId, expected_page_version: state.page.version },
+        authToken,
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["search", "review"] }),
   });
 
   const queue = data?.hits ?? [];
@@ -42,6 +60,13 @@ function ReviewInner() {
         <div className="callout callout--danger" style={{ marginBottom: 16 }}>
           <div className="callout__title">Error</div>
           Failed to load review records from search-service.
+        </div>
+      )}
+
+      {publishMutation.error && (
+        <div className="callout callout--danger" style={{ marginBottom: 16 }}>
+          <div className="callout__title">Publish failed</div>
+          {publishMutation.error instanceof Error ? publishMutation.error.message : "An unexpected error occurred."}
         </div>
       )}
 
@@ -67,10 +92,17 @@ function ReviewInner() {
           <div className="queue-row__diff">{record.visibility}</div>
           <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
             <button
-              className="btn btn--primary btn--sm"
+              className="btn btn--ghost btn--sm"
               onClick={() => router.push(`/wiki/${record.slug}`)}
             >
-              <Icon name="check" size={11} /> Open
+              <Icon name="arrow" size={11} /> Open
+            </button>
+            <button
+              className="btn btn--primary btn--sm"
+              disabled={publishMutation.isPending}
+              onClick={() => publishMutation.mutate(record.page_id)}
+            >
+              <Icon name="check" size={11} /> Publish
             </button>
           </div>
         </div>

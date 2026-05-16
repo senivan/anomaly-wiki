@@ -1,4 +1,5 @@
 import { request } from "./client";
+import { ApiError } from "./errors";
 import type { MediaAsset } from "./types";
 
 export const mediaApi = {
@@ -20,7 +21,7 @@ export const mediaApi = {
           (body as { detail?: string }).detail ??
           (body as { error?: { message?: string } }).error?.message ??
           "Upload failed";
-        throw new Error(detail);
+        throw new ApiError(res.status, detail, body);
       }
       return res.json() as Promise<MediaAsset>;
     }),
