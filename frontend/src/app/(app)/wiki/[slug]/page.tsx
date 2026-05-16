@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
@@ -285,7 +285,7 @@ function ArticleTab({ page, revision, userRole, slug }: {
       <aside>
         <nav className="toc">
           <h6>On this page</h6>
-          {revision?.content
+          {(revision?.content ?? "")
             .split("\n")
             .filter((l) => l.startsWith("## "))
             .map((l) => l.slice(3).trim())
@@ -301,6 +301,12 @@ function ArticleTab({ page, revision, userRole, slug }: {
             )}
             {classifications.map((classification) => (
               <dd key={classification} style={{ margin: "0 0 4px" }}>{classification}</dd>
+            ))}
+            {Object.entries(page.classifications ?? {}).map(([k, v]) => (
+              <Fragment key={k}>
+                <dt style={{ color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 10.5 }}>{k}</dt>
+                <dd style={{ margin: 0 }}>{v}</dd>
+              </Fragment>
             ))}
           </dl>
         </div>

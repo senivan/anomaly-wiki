@@ -20,7 +20,8 @@ export async function request<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const detail = (body as { detail?: string }).detail ?? "Unknown error";
+    const b = body as { detail?: string; error?: { message?: string } };
+    const detail = b.detail ?? b.error?.message ?? "Unknown error";
     throw new ApiError(res.status, detail, body);
   }
 

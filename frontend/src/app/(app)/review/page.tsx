@@ -21,7 +21,7 @@ function ReviewInner() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["search", "review"],
-    queryFn: () => searchApi.query({ q: "review", status: "Review" }, token ?? undefined),
+    queryFn: () => searchApi.query({ status: "Review" }, token ?? undefined),
   });
 
   const queue = data?.hits ?? [];

@@ -134,3 +134,18 @@ async def test_bad_credentials_error_is_exposed_as_unauthorized() -> None:
     assert response.headers["cache-control"] == "no-store"
     assert response.json()["error"]["details"]["upstream_status"] == 401
     assert response.json()["error"]["details"]["upstream_body"] == {"detail": "LOGIN_BAD_CREDENTIALS"}
+
+
+async def test_any_400_from_login_is_exposed_as_unauthorized() -> None:
+    """Any 400 from the login endpoint is an auth failure; validation errors are 422."""
+    upstream_app = FastAPI()
+
+    @upstream_app.post("/auth/login")
+    async def login_fail() -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": "LOGIN_USER_NOT_VERIFIED"})
+
+    app = create_app(upstream_transport=ASGITransport(app=upstream_app))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/auth/login", data={"username": "user@example.com"})
+
+    assert response.status_code == 401
