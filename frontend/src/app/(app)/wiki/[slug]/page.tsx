@@ -92,6 +92,15 @@ function articleHeadings(content: string): { id: string; text: string }[] {
     .map((text) => ({ id: uniqueHeadingId(text, counts), text }));
 }
 
+function yamlScalar(value: string): string {
+  return JSON.stringify(value);
+}
+
+function yamlList(values: string[]): string {
+  if (values.length === 0) return "[]";
+  return `\n${values.map((value) => `  - ${yamlScalar(value)}`).join("\n")}`;
+}
+
 export default function WikiPage() {
   const { slug } = useParams<{ slug: string }>();
   const { user, token } = useAuthStore();
@@ -512,12 +521,11 @@ function RawTab({ page, revision }: {
   revision: Revision | null | undefined;
 }) {
   const frontmatter = `---
-slug: ${page.slug}
-type: ${page.type}
-status: ${page.status}
-visibility: ${page.visibility}
-tags:
-${page.tags.map((t) => `  - ${t}`).join("\n")}
+slug: ${yamlScalar(page.slug)}
+type: ${yamlScalar(page.type)}
+status: ${yamlScalar(page.status)}
+visibility: ${yamlScalar(page.visibility)}
+tags: ${yamlList(page.tags)}
 ---
 
 # ${revision?.title ?? page.slug}
