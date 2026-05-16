@@ -39,7 +39,7 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
   const { setBaseline, markDirty, reset } = useEditorStore();
   const qc = useQueryClient();
 
-  const { data } = useQuery({
+  const { data, error, isFetching, isLoading, isError, refetch } = useQuery({
     queryKey: ["page", slug],
     queryFn: () => pagesApi.getBySlug(slug, token ?? undefined),
     enabled: !isNew,
@@ -203,6 +203,48 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
 
   const lineCount = md.split("\n").length;
   const charCount = md.length;
+
+  if (!isNew && isLoading) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <div className="kicker">Loading record...</div>
+            <div style={{ height: 48, background: "var(--paper-2)", margin: "12px 0", width: "60%" }} />
+            <div style={{ height: 16, background: "var(--paper-2)", marginTop: 10, width: "40%" }} />
+          </div>
+        </div>
+        <div className="edit-grid">
+          <div className="edit-pane">
+            <div className="edit-pane__head"><span>Markdown source</span></div>
+            <div style={{ height: 240, background: "var(--paper-2)" }} />
+          </div>
+          <div className="edit-pane">
+            <div className="edit-pane__head"><span>Live preview</span></div>
+            <div style={{ height: 240, background: "var(--paper-2)" }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isNew && (isError || !data)) {
+    return (
+      <div className="callout callout--danger" style={{ maxWidth: "none" }}>
+        <div className="callout__title"><Icon name="alert" size={11} /> Failed to load record</div>
+        <div style={{ marginBottom: 12 }}>
+          {error instanceof Error ? error.message : "The page could not be loaded."}
+        </div>
+        <button
+          className="btn btn--ghost btn--sm"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+        >
+          {isFetching ? "Retrying..." : "Retry"}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>
