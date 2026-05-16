@@ -1,10 +1,12 @@
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
-from clients.http import forward_authenticated_request
+from clients.http import PROTECTED_FORWARD_STRIP_HEADERS, forward_authenticated_request, forward_request
 from config import Settings, get_settings
+from errors import GatewayAuthError
 from security import AuthContext, get_auth_context
 
 router = APIRouter(prefix="/pages", tags=["pages"])
@@ -25,6 +27,29 @@ async def _forward_protected_page_request(
         upstream_path=upstream_path,
         settings=settings,
     )
+
+
+async def _optional_auth(request: Request, settings: Settings) -> AuthContext | None:
+    if not request.headers.get("Authorization"):
+        return None
+    return await get_auth_context(request, settings)
+
+
+def _assert_public_page_read(response: Response) -> None:
+    payload = json.loads(response.body)
+    page = payload.get("page") if isinstance(payload, dict) else None
+    if not isinstance(page, dict):
+        raise GatewayAuthError(
+            status_code=404,
+            code="page_not_public",
+            message="Page not found or access denied.",
+        )
+    if page.get("status") != "Published" or page.get("visibility") != "Public":
+        raise GatewayAuthError(
+            status_code=404,
+            code="page_not_public",
+            message="Page not found or access denied.",
+        )
 
 
 @router.get("/mine")
@@ -91,15 +116,27 @@ async def proxy_get_page_revision(
 async def proxy_get_page_state_by_slug(
     slug: str,
     request: Request,
-    auth: AuthContext = Depends(get_auth_context),
     settings: Settings = Depends(get_settings),
 ) -> Response:
-    return await _forward_protected_page_request(
+    auth = await _optional_auth(request, settings)
+    if auth is not None:
+        return await _forward_protected_page_request(
+            request,
+            auth=auth,
+            upstream_path=f"/pages/slug/{slug}",
+            settings=settings,
+        )
+
+    response = await forward_request(
         request,
-        auth=auth,
+        service="encyclopedia-service",
+        upstream_base_url=settings.encyclopedia_base_url,
         upstream_path=f"/pages/slug/{slug}",
         settings=settings,
+        excluded_headers=PROTECTED_FORWARD_STRIP_HEADERS,
     )
+    _assert_public_page_read(response)
+    return response
 
 
 @router.post("")

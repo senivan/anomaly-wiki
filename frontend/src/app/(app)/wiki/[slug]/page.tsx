@@ -249,11 +249,8 @@ function ArticleTab({ page, revision, userRole, slug }: {
         <div style={{ marginTop: 32 }}>
           <h6 className="kicker" style={{ marginBottom: 8 }}>Classification</h6>
           <dl style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-2)" }}>
-            {Object.entries(page.classifications ?? {}).map(([k, v]) => (
-              <>
-                <dt key={`k-${k}`} style={{ color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 10.5 }}>{k}</dt>
-                <dd key={`v-${k}`} style={{ margin: 0 }}>{v}</dd>
-              </>
+            {(page.classifications ?? []).map((classification) => (
+              <dd key={classification} style={{ margin: "0 0 4px" }}>{classification}</dd>
             ))}
           </dl>
         </div>

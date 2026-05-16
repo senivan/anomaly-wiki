@@ -18,7 +18,7 @@ export interface Page {
   current_draft_revision_id: string | null;
   version: number;
   tags: string[];
-  classifications: Record<string, string>;
+  classifications: string[];
   related_page_ids: string[];
   media_asset_ids: string[];
   created_at: string;
@@ -123,7 +123,7 @@ export interface StatusTransitionRequest {
 export interface UpdateMetadataRequest {
   expected_page_version: number;
   tags?: string[];
-  classifications?: Record<string, string>;
+  classifications?: string[];
   related_page_ids?: string[];
   media_asset_ids?: string[];
 }

@@ -41,6 +41,23 @@ def build_upstream_pages_app() -> FastAPI:
 
     @app.get("/pages/slug/{slug}")
     async def get_page_by_slug(slug: str, request: Request) -> JSONResponse:
+        if slug in {"published-public", "draft-public", "published-internal"}:
+            status = "Draft" if slug == "draft-public" else "Published"
+            visibility = "Internal" if slug == "published-internal" else "Public"
+            return JSONResponse(
+                {
+                    "page": {
+                        "slug": slug,
+                        "status": status,
+                        "visibility": visibility,
+                    },
+                    "current_published_revision": {
+                        "title": "Published public page",
+                        "content": "Visible to anonymous readers.",
+                    } if status == "Published" else None,
+                    "current_draft_revision": None,
+                }
+            )
         return JSONResponse(
             {
                 "slug": slug,
@@ -163,6 +180,40 @@ async def test_page_read_by_slug_forwards_with_gateway_identity_headers() -> Non
         "role": "Researcher",
         "authorization": None,
     }
+
+
+async def test_public_page_read_by_slug_allows_anonymous_published_public_page() -> None:
+    upstream = build_upstream_pages_app()
+    app = create_app(upstream_transport=ASGITransport(app=upstream))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/pages/slug/published-public",
+            headers={
+                "X-Authenticated-Source": "spoofed",
+                "X-Internal-Token": "client-secret",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["page"]["slug"] == "published-public"
+    assert body["page"]["status"] == "Published"
+    assert body["page"]["visibility"] == "Public"
+
+
+async def test_public_page_read_by_slug_hides_non_public_pages() -> None:
+    upstream = build_upstream_pages_app()
+    app = create_app(upstream_transport=ASGITransport(app=upstream))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        draft_response = await client.get("/pages/slug/draft-public")
+        internal_response = await client.get("/pages/slug/published-internal")
+
+    assert draft_response.status_code == 404
+    assert draft_response.json()["error"]["code"] == "page_not_public"
+    assert internal_response.status_code == 404
+    assert internal_response.json()["error"]["code"] == "page_not_public"
 
 
 async def test_my_pages_forwards_with_gateway_identity_headers() -> None:

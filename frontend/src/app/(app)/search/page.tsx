@@ -17,7 +17,7 @@ const PAGE_TYPES: PageType[] = [
 function SearchInner() {
   const params = useSearchParams();
   const router = useRouter();
-  const { token } = useAuthStore();
+  const { token, isHydrated } = useAuthStore();
 
   const [q, setQ]           = useState(params.get("q") ?? "");
   const [type, setType]     = useState<PageType | "">(params.get("type") as PageType ?? "");
@@ -30,8 +30,9 @@ function SearchInner() {
   );
 
   const { data, isFetching } = useQuery({
-    queryKey: ["search", queryParams],
+    queryKey: ["search", queryParams, token ?? "anonymous"],
     queryFn: () => searchApi.query(queryParams, token ?? undefined),
+    enabled: isHydrated,
   });
 
   const results = data?.hits ?? [];
