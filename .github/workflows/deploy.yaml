@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: anomaly-wiki-production
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -34,20 +37,57 @@ jobs:
           OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
 
           INTERNAL_TOKEN=${{ secrets.INTERNAL_TOKEN }}
+
+          NEXT_PUBLIC_GATEWAY_URL=${{ secrets.NEXT_PUBLIC_GATEWAY_URL }}
+          GATEWAY_INTERNAL_URL=http://api-gateway:8000
           EOF
 
-      - name: Deploy
+      - name: Prepare auth keys
         run: |
-          docker compose config
+          mkdir -p services/researcher-auth-service/secrets
+
+          if [ ! -f services/researcher-auth-service/secrets/rsa_private.pem ]; then
+            openssl genrsa -out services/researcher-auth-service/secrets/rsa_private.pem 2048
+          fi
+
+          chmod 600 services/researcher-auth-service/secrets/rsa_private.pem
+
+      - name: Validate compose
+        run: |
+          docker compose config --quiet
+
+      - name: Deploy stack
+        run: |
           docker compose up -d --build --remove-orphans
 
-      - name: Health check
+      - name: Check API gateway
         run: |
-          for i in {1..30}; do
-            curl -fsS http://127.0.0.1:8000/health && exit 0
-            sleep 3
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:8000/ready >/dev/null; then
+              echo "api-gateway ready"
+              exit 0
+            fi
+            sleep 5
           done
 
           docker compose ps
           docker compose logs --tail=200 api-gateway
           exit 1
+
+      - name: Check frontend
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000 >/dev/null; then
+              echo "frontend ready"
+              exit 0
+            fi
+            sleep 3
+          done
+
+          docker compose ps
+          docker compose logs --tail=200 frontend
+          exit 1
+
+      - name: Cleanup dangling images
+        run: |
+          docker image prune -f
