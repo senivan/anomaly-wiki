@@ -3,11 +3,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore, hasRole } from "@/lib/store/auth";
 import { useQuery } from "@tanstack/react-query";
 
-const PAGE_TYPES = [
-  "Anomaly", "Artifact", "Location", "Incident",
-  "Expedition", "Researcher Note", "Article",
-] as const;
-
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -63,19 +58,6 @@ export function Sidebar() {
           </ul>
         </>
       )}
-
-      <div className="side-h"><span>Browse by type</span></div>
-      <ul className="nav-list">
-        {PAGE_TYPES.map((t) => (
-          <li
-            key={t}
-            className="nav-item"
-            onClick={() => router.push(`/search?type=${encodeURIComponent(t)}`)}
-          >
-            <span>{t}</span>
-          </li>
-        ))}
-      </ul>
 
       <div className="side-h"><span>System</span></div>
       <ul className="nav-list">
