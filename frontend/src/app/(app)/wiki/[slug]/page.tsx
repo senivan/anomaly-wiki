@@ -253,7 +253,7 @@ export default function WikiPage() {
         <ArticleTab
           page={page}
           revision={revision}
-          userRole={user?.role}
+          canEditDraft={canEditDraft}
           slug={slug}
         />
       )}
@@ -265,10 +265,10 @@ export default function WikiPage() {
   );
 }
 
-function ArticleTab({ page, revision, userRole, slug }: {
+function ArticleTab({ page, revision, canEditDraft, slug }: {
   page: import("@/lib/api/types").Page;
   revision: Revision | null | undefined;
-  userRole?: string;
+  canEditDraft: boolean;
   slug: string;
 }) {
   const classifications = normalizeClassifications(
@@ -324,7 +324,7 @@ function ArticleTab({ page, revision, userRole, slug }: {
         <hr style={{ border: 0, borderTop: "1px solid var(--rule)", margin: "32px 0 16px" }} />
         <div className="spread">
           <span className="mono xsmall muted">Last revision · {page.updated_at.slice(0, 10)}</span>
-          {userRole && userRole !== "Public" && (
+          {canEditDraft && (
             <Link href={`/edit/${slug}`} className="btn btn--sm">
               <Icon name="edit" size={11} /> Edit page
             </Link>
