@@ -362,15 +362,18 @@ function RevisionsTab({ revisions }: { revisions: Revision[] }) {
   if (revisions.length === 0) {
     return <div className="muted" style={{ padding: "20px 0" }}>No revision history available.</div>;
   }
-  const latest  = revisions[0];
-  const prev    = revisions[1];
+  const sorted = [...revisions].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+  const latest  = sorted[0];
+  const prev    = sorted[1];
   const diffLines = generateDiff(prev?.content ?? "", latest?.content ?? "");
 
   return (
     <div className="article-grid" style={{ gridTemplateColumns: "1fr 320px" }}>
       <div>
         <div className="kicker" style={{ marginBottom: 10 }}>
-          Diff · r{revisions.length} ↔ r{revisions.length - 1}
+          Diff · r{sorted.length} ↔ r{sorted.length - 1}
         </div>
         <div className="diff" style={{ marginBottom: 24 }}>
           {diffLines.map((line, i) => (
@@ -384,10 +387,10 @@ function RevisionsTab({ revisions }: { revisions: Revision[] }) {
       <aside>
         <h6 className="kicker" style={{ marginBottom: 8 }}>Revision history</h6>
         <ul className="related-list">
-          {revisions.map((r, i) => (
+          {sorted.map((r, i) => (
             <li key={r.id} style={{ display: "block" }}>
               <div className="spread">
-                <b>r{revisions.length - i}</b>
+                <b>r{sorted.length - i}</b>
                 <span className="mono xsmall muted">{r.created_at.slice(0, 16)}</span>
               </div>
               <div className="xsmall" style={{ margin: "2px 0" }}>{r.summary || "No summary"}</div>

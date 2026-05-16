@@ -5,6 +5,12 @@ const GATEWAY =
     ? process.env.GATEWAY_INTERNAL_URL ?? "http://localhost:8000"
     : process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000";
 
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: () => void): void {
+  onUnauthorized = handler;
+}
+
 export async function request<T>(
   path: string,
   options: RequestInit & { token?: string } = {},
@@ -19,6 +25,9 @@ export async function request<T>(
   const res = await fetch(`${GATEWAY}${path}`, { ...init, headers });
 
   if (!res.ok) {
+    if (res.status === 401 && onUnauthorized && token) {
+      onUnauthorized();
+    }
     const body = await res.json().catch(() => ({}));
     const b = body as { detail?: string; error?: { message?: string } };
     const detail = b.detail ?? b.error?.message ?? "Unknown error";
