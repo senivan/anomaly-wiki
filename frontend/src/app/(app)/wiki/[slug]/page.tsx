@@ -400,20 +400,53 @@ function RevisionsTab({ revisions }: { revisions: Revision[] }) {
   );
 }
 
-function generateDiff(oldText: string, newText: string) {
-  const oldLines = oldText.split("\n").slice(0, 10);
-  const newLines = newText.split("\n").slice(0, 10);
-  const lines: { type: "ctx" | "add" | "del"; num: number; text: string }[] = [];
-  const maxLen = Math.max(oldLines.length, newLines.length);
-  for (let i = 0; i < Math.min(maxLen, 12); i++) {
-    const o = oldLines[i];
-    const n = newLines[i];
-    if (o === n) lines.push({ type: "ctx", num: i + 1, text: o ?? "" });
-    else {
-      if (o !== undefined) lines.push({ type: "del", num: i + 1, text: o });
-      if (n !== undefined) lines.push({ type: "add", num: i + 1, text: n });
+type DiffLine = { type: "ctx" | "add" | "del"; num: number; text: string };
+
+function generateDiff(oldText: string, newText: string): DiffLine[] {
+  const oldLines = oldText.split("\n");
+  const newLines = newText.split("\n");
+  const lengths = Array.from({ length: oldLines.length + 1 }, () =>
+    Array<number>(newLines.length + 1).fill(0),
+  );
+
+  for (let i = oldLines.length - 1; i >= 0; i--) {
+    for (let j = newLines.length - 1; j >= 0; j--) {
+      lengths[i][j] = oldLines[i] === newLines[j]
+        ? lengths[i + 1][j + 1] + 1
+        : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
     }
   }
+
+  const lines: DiffLine[] = [];
+  let oldIndex = 0;
+  let newIndex = 0;
+
+  while (oldIndex < oldLines.length && newIndex < newLines.length) {
+    const oldLine = oldLines[oldIndex];
+    const newLine = newLines[newIndex];
+
+    if (oldLine === newLine) {
+      lines.push({ type: "ctx", num: newIndex + 1, text: newLine });
+      oldIndex++;
+      newIndex++;
+    } else if (lengths[oldIndex + 1][newIndex] >= lengths[oldIndex][newIndex + 1]) {
+      lines.push({ type: "del", num: oldIndex + 1, text: oldLine });
+      oldIndex++;
+    } else {
+      lines.push({ type: "add", num: newIndex + 1, text: newLine });
+      newIndex++;
+    }
+  }
+
+  while (oldIndex < oldLines.length) {
+    lines.push({ type: "del", num: oldIndex + 1, text: oldLines[oldIndex] });
+    oldIndex++;
+  }
+  while (newIndex < newLines.length) {
+    lines.push({ type: "add", num: newIndex + 1, text: newLines[newIndex] });
+    newIndex++;
+  }
+
   return lines;
 }
 
