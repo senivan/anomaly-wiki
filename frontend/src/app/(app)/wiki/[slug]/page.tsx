@@ -92,6 +92,15 @@ function articleHeadings(content: string): { id: string; text: string }[] {
     .map((text) => ({ id: uniqueHeadingId(text, counts), text }));
 }
 
+function yamlScalar(value: string): string {
+  return JSON.stringify(value);
+}
+
+function yamlList(values: string[]): string {
+  if (values.length === 0) return "[]";
+  return `\n${values.map((value) => `  - ${yamlScalar(value)}`).join("\n")}`;
+}
+
 export default function WikiPage() {
   const { slug } = useParams<{ slug: string }>();
   const { user, token } = useAuthStore();
@@ -159,6 +168,9 @@ export default function WikiPage() {
   const revision = current_published_revision ?? current_draft_revision;
   const revisions = (revisionsData?.revisions ?? []) as Revision[];
   const canPublish = page.current_draft_revision_id !== null;
+  const canEditDraft =
+    user?.role === "Researcher" &&
+    current_draft_revision?.author_id === user.id;
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "article",   label: "Article" },
@@ -207,12 +219,12 @@ export default function WikiPage() {
             <dt>Updated</dt>   <dd>{page.updated_at.slice(0, 10)}</dd>
           </dl>
           <div className="row" style={{ marginTop: 14, gap: 6, flexWrap: "wrap" }}>
-            {user && hasRole(user.role, "Researcher") && (
+            {canEditDraft && (
               <Link href={`/edit/${page.slug}`} className="btn btn--sm">
                 <Icon name="edit" size={11} /> Edit
               </Link>
             )}
-            {user && hasRole(user.role, "Researcher") && page.status === "Draft" && (
+            {canEditDraft && page.status === "Draft" && (
               <button
                 className="btn btn--ghost btn--sm"
                 onClick={() => submitMutation.mutate()}
@@ -250,7 +262,7 @@ export default function WikiPage() {
         <ArticleTab
           page={page}
           revision={revision}
-          userRole={user?.role}
+          canEditDraft={canEditDraft}
           slug={slug}
         />
       )}
@@ -262,10 +274,10 @@ export default function WikiPage() {
   );
 }
 
-function ArticleTab({ page, revision, userRole, slug }: {
+function ArticleTab({ page, revision, canEditDraft, slug }: {
   page: import("@/lib/api/types").Page;
   revision: Revision | null | undefined;
-  userRole?: string;
+  canEditDraft: boolean;
   slug: string;
 }) {
   const classifications = normalizeClassifications(
@@ -321,7 +333,7 @@ function ArticleTab({ page, revision, userRole, slug }: {
         <hr style={{ border: 0, borderTop: "1px solid var(--rule)", margin: "32px 0 16px" }} />
         <div className="spread">
           <span className="mono xsmall muted">Last revision · {page.updated_at.slice(0, 10)}</span>
-          {userRole && userRole !== "Public" && (
+          {canEditDraft && (
             <Link href={`/edit/${slug}`} className="btn btn--sm">
               <Icon name="edit" size={11} /> Edit page
             </Link>
@@ -515,12 +527,11 @@ function RawTab({ page, revision }: {
   revision: Revision | null | undefined;
 }) {
   const frontmatter = `---
-slug: ${page.slug}
-type: ${page.type}
-status: ${page.status}
-visibility: ${page.visibility}
-tags:
-${page.tags.map((t) => `  - ${t}`).join("\n")}
+slug: ${yamlScalar(page.slug)}
+type: ${yamlScalar(page.type)}
+status: ${yamlScalar(page.status)}
+visibility: ${yamlScalar(page.visibility)}
+tags: ${yamlList(page.tags)}
 ---
 
 # ${revision?.title ?? page.slug}
