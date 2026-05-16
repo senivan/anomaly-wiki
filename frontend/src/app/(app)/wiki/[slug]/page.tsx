@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useState } from "react";
+import { Fragment, isValidElement, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
@@ -56,6 +56,40 @@ function normalizeClassifications(value: unknown): string[] {
   }
 
   return [];
+}
+
+function textFromNode(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textFromNode).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return textFromNode(node.props.children);
+  return "";
+}
+
+function slugHeading(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "section";
+}
+
+function uniqueHeadingId(text: string, counts: Map<string, number>): string {
+  const base = slugHeading(text);
+  const count = counts.get(base) ?? 0;
+  counts.set(base, count + 1);
+  return count === 0 ? base : `${base}-${count + 1}`;
+}
+
+function articleHeadings(content: string): { id: string; text: string }[] {
+  const counts = new Map<string, number>();
+  return content
+    .split("\n")
+    .filter((line) => line.startsWith("## "))
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean)
+    .map((text) => ({ id: uniqueHeadingId(text, counts), text }));
 }
 
 export default function WikiPage() {
@@ -237,6 +271,8 @@ function ArticleTab({ page, revision, userRole, slug }: {
   const classifications = normalizeClassifications(
     (page as { classifications?: unknown }).classifications,
   );
+  const headings = articleHeadings(revision?.content ?? "");
+  const renderedHeadingCounts = new Map<string, number>();
 
   return (
     <div className="article-grid">
@@ -255,7 +291,11 @@ function ArticleTab({ page, revision, userRole, slug }: {
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              h2: ({ children }) => <h2>{children}</h2>,
+              h2: ({ children }) => (
+                <h2 id={uniqueHeadingId(textFromNode(children), renderedHeadingCounts)}>
+                  {children}
+                </h2>
+              ),
               table: ({ children }) => <table className="field-table">{children}</table>,
               img: ({ src, alt }) => (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -292,13 +332,9 @@ function ArticleTab({ page, revision, userRole, slug }: {
       <aside>
         <nav className="toc">
           <h6>On this page</h6>
-          {(revision?.content ?? "")
-            .split("\n")
-            .filter((l) => l.startsWith("## "))
-            .map((l) => l.slice(3).trim())
-            .map((h) => (
-              <a key={h} href={`#${h.toLowerCase().replace(/\s+/g, "-")}`}>{h}</a>
-            ))}
+          {headings.map((heading) => (
+            <a key={heading.id} href={`#${heading.id}`}>{heading.text}</a>
+          ))}
         </nav>
         <div style={{ marginTop: 32 }}>
           <h6 className="kicker" style={{ marginBottom: 8 }}>Classification</h6>
