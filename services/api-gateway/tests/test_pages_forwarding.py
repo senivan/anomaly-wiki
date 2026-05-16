@@ -8,6 +8,7 @@ from tests.test_auth_validation import build_auth_keypair, issue_token
 
 def build_upstream_pages_app() -> FastAPI:
     app = FastAPI()
+    public_asset_id = "11111111-1111-1111-1111-111111111111"
 
     @app.get("/pages/mine")
     async def list_my_pages(request: Request) -> JSONResponse:
@@ -50,6 +51,7 @@ def build_upstream_pages_app() -> FastAPI:
                         "slug": slug,
                         "status": status,
                         "visibility": visibility,
+                        "media_asset_ids": [public_asset_id],
                     },
                     "current_published_revision": {
                         "title": "Published public page",
@@ -63,6 +65,17 @@ def build_upstream_pages_app() -> FastAPI:
                 "slug": slug,
                 "source": request.headers.get("x-authenticated-source"),
                 "role": request.headers.get("x-authenticated-user-role"),
+                "authorization": request.headers.get("authorization"),
+            }
+        )
+
+    @app.get("/media/{asset_id}/download-url")
+    async def download_url(asset_id: str, request: Request) -> JSONResponse:
+        return JSONResponse(
+            {
+                "asset_id": asset_id,
+                "url": f"http://storage.local/media/{asset_id}.svg?signature=test",
+                "source": request.headers.get("x-authenticated-source"),
                 "authorization": request.headers.get("authorization"),
             }
         )
@@ -210,6 +223,53 @@ async def test_public_page_read_by_slug_hides_non_public_pages() -> None:
         draft_response = await client.get("/pages/slug/draft-public")
         internal_response = await client.get("/pages/slug/published-internal")
 
+    assert draft_response.status_code == 404
+    assert draft_response.json()["error"]["code"] == "page_not_public"
+    assert internal_response.status_code == 404
+    assert internal_response.json()["error"]["code"] == "page_not_public"
+
+
+async def test_public_page_media_content_redirects_only_linked_public_assets() -> None:
+    asset_id = "11111111-1111-1111-1111-111111111111"
+    upstream = build_upstream_pages_app()
+    app = create_app(upstream_transport=ASGITransport(app=upstream))
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        follow_redirects=False,
+    ) as client:
+        response = await client.get(
+            f"/pages/slug/published-public/media/{asset_id}/content",
+            headers={
+                "X-Authenticated-Source": "spoofed",
+                "X-Internal-Token": "client-secret",
+            },
+        )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == f"http://storage.local/media/{asset_id}.svg?signature=test"
+
+
+async def test_public_page_media_content_hides_unlinked_or_non_public_assets() -> None:
+    linked_asset_id = "11111111-1111-1111-1111-111111111111"
+    unlinked_asset_id = "22222222-2222-2222-2222-222222222222"
+    upstream = build_upstream_pages_app()
+    app = create_app(upstream_transport=ASGITransport(app=upstream))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        unlinked_response = await client.get(
+            f"/pages/slug/published-public/media/{unlinked_asset_id}/content",
+        )
+        draft_response = await client.get(
+            f"/pages/slug/draft-public/media/{linked_asset_id}/content",
+        )
+        internal_response = await client.get(
+            f"/pages/slug/published-internal/media/{linked_asset_id}/content",
+        )
+
+    assert unlinked_response.status_code == 404
+    assert unlinked_response.json()["error"]["code"] == "media_not_public"
     assert draft_response.status_code == 404
     assert draft_response.json()["error"]["code"] == "page_not_public"
     assert internal_response.status_code == 404

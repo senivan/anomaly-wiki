@@ -11,11 +11,24 @@ import { Icon } from "@/components/ui/Icon";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { PageTypeChip } from "@/components/ui/PageTypeChip";
 import { Stamp } from "@/components/ui/Stamp";
-import { ImgHolder } from "@/components/ui/ImgHolder";
 import Link from "next/link";
 import type { Revision } from "@/lib/api/types";
 
 type Tab = "article" | "revisions" | "media" | "discussion" | "raw";
+
+const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000";
+
+function resolveMarkdownImageSrc(src: string | undefined, slug: string): string | undefined {
+  if (!src) return src;
+  try {
+    const url = new URL(src, window.location.href);
+    const match = url.pathname.match(/\/(?:anomaly-media\/)?assets\/([0-9a-f-]{36})\//i);
+    if (!match) return src;
+    return `${GATEWAY}/pages/slug/${encodeURIComponent(slug)}/media/${match[1]}/content`;
+  } catch {
+    return src;
+  }
+}
 
 export default function WikiPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -199,17 +212,19 @@ function ArticleTab({ page, revision, userRole, slug }: {
           <div style={{ marginBottom: 16 }}><Stamp text="INTERNAL · L2+" /></div>
         )}
 
-        <ImgHolder label={`${page.slug} · field photograph`} ratio="16/9" />
-        <p className="muted xsmall mono" style={{ marginTop: 6 }}>
-          FIG. 01 — {page.slug} · {page.updated_at.slice(0, 10)}
-        </p>
-
         {revision?.content ? (
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
               h2: ({ children }) => <h2>{children}</h2>,
               table: ({ children }) => <table className="field-table">{children}</table>,
+              img: ({ src, alt }) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={resolveMarkdownImageSrc(typeof src === "string" ? src : undefined, page.slug)}
+                  alt={alt ?? ""}
+                />
+              ),
               blockquote: ({ children }) => (
                 <div className="callout callout--info">
                   <div className="callout__title"><Icon name="shield" size={11} />Note</div>
