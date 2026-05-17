@@ -482,15 +482,6 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
         <div className="muted xsmall mono">
           {saveMsg ?? `revision r${revision ? "n+1" : "1"} (draft)`}
         </div>
-        <div className="row" style={{ gap: 6 }}>
-          <button
-            className="btn btn--ghost btn--sm"
-            disabled={isNew}
-            onClick={() => window.open(`/wiki/${slug}`, "_blank")}
-          >
-            Preview as Public
-          </button>
-        </div>
       </div>
 
       {saveError && (
