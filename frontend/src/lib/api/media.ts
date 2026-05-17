@@ -8,7 +8,7 @@ export const mediaApi = {
 
   upload: (formData: FormData, token: string) =>
     fetch(
-      `${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000"}/media`,
+      `${process.env.NEXT_PUBLIC_MEDIA_URL ?? process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000"}/media`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
