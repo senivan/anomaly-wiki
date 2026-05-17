@@ -6,7 +6,7 @@ from pathlib import PurePath
 from urllib.parse import urlparse, urlunparse
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import Settings, get_settings
@@ -158,6 +158,24 @@ async def list_media_assets(
     uploaded_by = _authenticated_user_id(uploaded_by_header)
     repository = MediaAssetRepository(session)
     assets = await repository.list_assets_for_user(uploaded_by)
+    return [MediaAssetResponse.model_validate(asset) for asset in assets]
+
+
+@router.get(
+    "/batch",
+    response_model=list[MediaAssetResponse],
+    dependencies=[Depends(verify_gateway_source)],
+)
+async def get_media_assets_batch(
+    ids: str = Query(..., description="Comma-separated asset UUIDs"),
+    session: AsyncSession = Depends(get_async_session),
+) -> list[MediaAssetResponse]:
+    try:
+        asset_ids = [UUID(part.strip()) for part in ids.split(",") if part.strip()]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="All ids must be valid UUIDs.") from exc
+    repository = MediaAssetRepository(session)
+    assets = await repository.get_assets_by_ids(asset_ids)
     return [MediaAssetResponse.model_validate(asset) for asset in assets]
 
 

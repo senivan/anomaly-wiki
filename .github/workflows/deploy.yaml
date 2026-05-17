@@ -39,6 +39,7 @@ jobs:
           INTERNAL_TOKEN=${{ secrets.INTERNAL_TOKEN }}
 
           NEXT_PUBLIC_GATEWAY_URL=${{ secrets.NEXT_PUBLIC_GATEWAY_URL }}
+          NEXT_PUBLIC_MEDIA_URL=${{ secrets.NEXT_PUBLIC_MEDIA_URL }}
           GATEWAY_INTERNAL_URL=http://api-gateway:8000
           EOF
 

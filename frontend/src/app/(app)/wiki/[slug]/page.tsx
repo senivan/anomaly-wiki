@@ -14,7 +14,7 @@ import { Stamp } from "@/components/ui/Stamp";
 import Link from "next/link";
 import type { Revision } from "@/lib/api/types";
 
-type Tab = "article" | "revisions" | "media" | "discussion" | "raw";
+type Tab = "article" | "revisions" | "media" | "raw";
 
 const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000";
 
@@ -176,7 +176,6 @@ export default function WikiPage() {
     { id: "article",   label: "Article" },
     { id: "revisions", label: "Revisions" },
     { id: "media",     label: "Media" },
-    { id: "discussion",label: "Discussion" },
     { id: "raw",       label: "Raw markdown" },
   ];
 
@@ -267,8 +266,8 @@ export default function WikiPage() {
         />
       )}
       {tab === "revisions" && <RevisionsTab revisions={revisions} />}
-      {tab === "media"     && <MediaTab pageId={page.id} token={token} />}
-      {tab === "discussion"&& <DiscussionTab />}
+      {tab === "media"     && <MediaTab mediaAssetIds={page.media_asset_ids} token={token} />}
+
       {tab === "raw"       && <RawTab page={page} revision={revision} />}
     </div>
   );
@@ -465,16 +464,10 @@ function generateDiff(oldText: string, newText: string): DiffLine[] {
   return lines;
 }
 
-function MediaTab({ pageId, token }: { pageId: string; token: string | null }) {
+function MediaTab({ mediaAssetIds, token }: { mediaAssetIds: string[]; token: string | null }) {
   const { data } = useQuery({
-    queryKey: ["page-media", pageId],
-    queryFn: async () => {
-      if (!token) return [];
-      const state = await pagesApi.getById(pageId, token);
-      return Promise.all(
-        state.page.media_asset_ids.map((assetId) => mediaApi.getAsset(assetId, token)),
-      );
-    },
+    queryKey: ["page-media", mediaAssetIds],
+    queryFn: () => mediaAssetIds.length === 0 ? [] : mediaApi.getByIds(mediaAssetIds, token!),
     enabled: !!token,
   });
 
@@ -499,25 +492,6 @@ function MediaTab({ pageId, token }: { pageId: string; token: string | null }) {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function DiscussionTab() {
-  return (
-    <div style={{ maxWidth: "80ch" }}>
-      <div className="muted" style={{ padding: "20px 0" }}>Discussion threads will appear here.</div>
-      <div style={{ marginTop: 18, border: "1px solid var(--ink)", padding: 14 }}>
-        <div className="kicker" style={{ marginBottom: 8 }}>Add comment</div>
-        <textarea
-          className="edit-textarea"
-          style={{ minHeight: 80 }}
-          placeholder="Comments are visible to all Researchers and Editors."
-        />
-        <div className="row" style={{ justifyContent: "flex-end", marginTop: 6 }}>
-          <button className="btn btn--primary btn--sm">Post comment</button>
-        </div>
-      </div>
     </div>
   );
 }

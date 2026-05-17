@@ -8,7 +8,7 @@ export const mediaApi = {
 
   upload: (formData: FormData, token: string) =>
     fetch(
-      `${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000"}/media`,
+      `${process.env.NEXT_PUBLIC_MEDIA_URL ?? process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000"}/media`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -28,6 +28,9 @@ export const mediaApi = {
 
   getAsset: (assetId: string, token: string) =>
     request<MediaAsset>(`/media/${assetId}`, { token }),
+
+  getByIds: (assetIds: string[], token: string) =>
+    request<MediaAsset[]>(`/media/batch?ids=${assetIds.join(",")}`, { token }),
 
   getDownloadUrl: (assetId: string, token: string) =>
     request<{ url: string }>(`/media/${assetId}/download-url`, { token }),

@@ -95,6 +95,15 @@ async def proxy_list_media_assets(
     return await _proxy_media_request(request, auth, settings, "/media")
 
 
+@router.get("/batch")
+async def proxy_get_media_assets_batch(
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    return await _proxy_media_request(request, auth, settings, "/media/batch")
+
+
 @router.get("/{asset_id}")
 async def proxy_get_media_asset(
     asset_id: UUID,

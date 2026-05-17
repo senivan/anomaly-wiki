@@ -68,7 +68,6 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
   useEffect(() => {
     if (data) {
       const rev = data.current_draft_revision ?? data.current_published_revision;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(rev?.title ?? "");
       setSummary(rev?.summary ?? "");
       setMd(rev?.content ?? "");
@@ -482,15 +481,6 @@ function EditPageInner({ slug, isNew }: { slug: string; isNew: boolean }) {
       <div className="spread" style={{ marginTop: 14 }}>
         <div className="muted xsmall mono">
           {saveMsg ?? `revision r${revision ? "n+1" : "1"} (draft)`}
-        </div>
-        <div className="row" style={{ gap: 6 }}>
-          <button
-            className="btn btn--ghost btn--sm"
-            disabled={isNew}
-            onClick={() => window.open(`/wiki/${slug}`, "_blank")}
-          >
-            Preview as Public
-          </button>
         </div>
       </div>
 
