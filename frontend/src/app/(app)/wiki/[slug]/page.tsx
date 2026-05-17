@@ -14,7 +14,7 @@ import { Stamp } from "@/components/ui/Stamp";
 import Link from "next/link";
 import type { Revision } from "@/lib/api/types";
 
-type Tab = "article" | "revisions" | "media" | "discussion" | "raw";
+type Tab = "article" | "revisions" | "media" | "raw";
 
 const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000";
 
@@ -176,7 +176,6 @@ export default function WikiPage() {
     { id: "article",   label: "Article" },
     { id: "revisions", label: "Revisions" },
     { id: "media",     label: "Media" },
-    { id: "discussion",label: "Discussion" },
     { id: "raw",       label: "Raw markdown" },
   ];
 
@@ -268,7 +267,7 @@ export default function WikiPage() {
       )}
       {tab === "revisions" && <RevisionsTab revisions={revisions} />}
       {tab === "media"     && <MediaTab mediaAssetIds={page.media_asset_ids} token={token} />}
-      {tab === "discussion"&& <DiscussionTab />}
+
       {tab === "raw"       && <RawTab page={page} revision={revision} />}
     </div>
   );
@@ -493,25 +492,6 @@ function MediaTab({ mediaAssetIds, token }: { mediaAssetIds: string[]; token: st
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function DiscussionTab() {
-  return (
-    <div style={{ maxWidth: "80ch" }}>
-      <div className="muted" style={{ padding: "20px 0" }}>Discussion threads will appear here.</div>
-      <div style={{ marginTop: 18, border: "1px solid var(--ink)", padding: 14 }}>
-        <div className="kicker" style={{ marginBottom: 8 }}>Add comment</div>
-        <textarea
-          className="edit-textarea"
-          style={{ minHeight: 80 }}
-          placeholder="Comments are visible to all Researchers and Editors."
-        />
-        <div className="row" style={{ justifyContent: "flex-end", marginTop: 6 }}>
-          <button className="btn btn--primary btn--sm">Post comment</button>
-        </div>
-      </div>
     </div>
   );
 }
